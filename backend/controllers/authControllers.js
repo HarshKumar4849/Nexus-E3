@@ -1,6 +1,7 @@
 const userModel = require("../models/userModel");
 const generateToken = require("../utils/generateToken");
 const bcrypt = require("bcrypt");
+const redisClient = require("../config/redisClient")
 
 module.exports.register = async (req, res) => {
   try {
@@ -21,6 +22,13 @@ module.exports.register = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ error: "User already exists" });
     }
+
+    // Check OTP verification
+   const isVerified = await redisClient.get(`verified:${email}`);
+
+   if (!isVerified) {
+      return res.status(400).json({ error: "Email not verified via OTP" });
+    }
     
     // Hash the password using bcrypt
     const saltRounds = 10;
@@ -33,6 +41,7 @@ module.exports.register = async (req, res) => {
       password: hashedPassword,
       regdNo
     });
+    await redisClient.del(`verified:${email}`);
 
     // Generate JWT token
     let token = generateToken(newUser);

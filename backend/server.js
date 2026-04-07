@@ -18,7 +18,9 @@ const server = http.createServer(app);
 
 // ====== MIDDLEWARE ======
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: function (origin, callback) {
+    callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -37,9 +39,12 @@ app.get('/', (req, res) => {
 });
 
 const userRouter = require('./routes/userRouter');
-app.use('/user', userRouter);
+const etaRouter = require('./routes/etaRouter');
+const otpRouter = require("./routes/otpRouter");
 
-app.get('/routes', getAllRoutes);
+app.use('/user', userRouter);
+app.use("/api/auth", otpRouter);
+app.use('/api/eta', etaRouter);
 app.get('/routes/:busId', getRouteByBus);
 
 // ====== SOCKET.IO INIT ======

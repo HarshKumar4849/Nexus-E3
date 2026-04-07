@@ -54,39 +54,6 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      // Check if account exists (simulated)
-      const registeredAccounts = JSON.parse(
-        localStorage.getItem("campus-commute-accounts") || "[]"
-      );
-      const accountExists = registeredAccounts.some(
-        (acc: any) => acc.email === email && acc.role === pendingRole
-      );
-
-      if (!accountExists) {
-        toast({
-          title: "Account not found",
-          description: "Please sign up first.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Check password
-      const account = registeredAccounts.find(
-        (acc: any) => acc.email === email && acc.role === pendingRole
-      );
-
-      if (account.password !== password) {
-        toast({
-          title: "Login failed",
-          description: "Invalid email or password",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-
       const success = await login(email, password, pendingRole);
       if (success) {
         toast({
@@ -94,6 +61,12 @@ const Login = () => {
           description: "Welcome back to Campus Commute",
         });
         navigate(pendingRole === "driver" ? "/driver-home" : "/home");
+      } else {
+        toast({
+          title: "Login failed",
+          description: "Invalid email or password. Please check your credentials.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       toast({

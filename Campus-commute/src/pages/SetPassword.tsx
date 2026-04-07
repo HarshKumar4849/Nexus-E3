@@ -12,7 +12,7 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
 
 const SetPassword = () => {
   const navigate = useNavigate();
-  const { pendingUserData, pendingEmail, pendingRole } = useAuth();
+  const { pendingUserData, pendingEmail, pendingRole, setPendingUserData } = useAuth();
   const { toast } = useToast();
 
   const [newPassword, setNewPassword] = useState("");
@@ -38,42 +38,38 @@ const SetPassword = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!validateForm()) return;
 
-    // Save account to localStorage
-    const registeredAccounts = JSON.parse(
-      localStorage.getItem("campus-commute-accounts") || "[]"
-    );
+    // Save pending password
+    setPendingUserData({ ...pendingUserData, password: newPassword });
 
-    // Check if account already exists
-    const accountExists = registeredAccounts.some(
-      (acc: any) => acc.email === pendingEmail && acc.role === pendingRole
-    );
-
-    if (accountExists) {
+    try {
+      // Send OTP via API
+      const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail })
+      });
+      
+      if (resp.ok) {
+        navigate("/otp-verification");
+      } else {
+        const errorData = await resp.json();
+        toast({
+          title: "Failed to send OTP",
+          description: errorData.message || errorData.error || "Please try again",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error(err);
       toast({
-        title: "Account Already Exists",
-        description: "This email is already registered",
+        title: "Network Error",
+        description: "Failed to send OTP",
         variant: "destructive",
       });
-      return;
     }
-
-    const newAccount = {
-      email: pendingEmail,
-      password: newPassword,
-      role: pendingRole,
-      fullName: pendingUserData.fullName || "",
-      yearBatch: pendingUserData.yearBatch,
-      // include any pending data (route, timing, phone etc.)
-      ...pendingUserData,
-    };
-
-    registeredAccounts.push(newAccount);
-    localStorage.setItem("campus-commute-accounts", JSON.stringify(registeredAccounts));
-
-    navigate("/otp-verification");
   };
 
   return (

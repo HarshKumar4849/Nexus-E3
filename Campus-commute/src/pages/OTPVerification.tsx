@@ -9,10 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const OTPVerification = () => {
   const navigate = useNavigate();
-  const { pendingEmail, setPendingEmail } = useAuth();
+  const { pendingEmail, setPendingEmail, completeSignup } = useAuth();
   const { toast } = useToast();
   
-  const [otp, setOtp] = useState(["", "", "", ""]);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [resendCount, setResendCount] = useState(3);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -33,7 +33,7 @@ const OTPVerification = () => {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -44,22 +44,62 @@ const OTPVerification = () => {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullOtp = otp.join("");
-    if (fullOtp.length !== 4) {
+    if (fullOtp.length !== 6) {
       toast({
         title: "Invalid OTP",
-        description: "Please enter all 4 digits",
+        description: "Please enter all 6 digits",
         variant: "destructive",
       });
       return;
     }
 
-    // Simulate OTP verification
-    navigate("/success");
+    try {
+      // Verify OTP via API
+      const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/api/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, enteredOTP: fullOtp })
+      });
+      
+      const data = await resp.json();
+      if (!resp.ok) {
+        toast({
+          title: "Verification Failed",
+          description: data.message || data.error || "Invalid OTP",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Complete Signup & Register User
+      const result = await completeSignup({});
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Your account has been created!",
+        });
+        navigate("/success");
+      } else {
+        toast({
+          title: "Registration Failed",
+          description: result.error || "Could not create user account",
+          variant: "destructive",
+        });
+      }
+      
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Network Error",
+        description: "Failed to verify OTP",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (resendCount <= 0) {
       toast({
         title: "Max attempts reached",
@@ -69,14 +109,33 @@ const OTPVerification = () => {
       return;
     }
 
-    setResendCount(resendCount - 1);
-    setOtp(["", "", "", ""]);
-    inputRefs.current[0]?.focus();
-    
-    toast({
-      title: "OTP Resent",
-      description: "A new verification code has been sent to your email",
-    });
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail })
+      });
+      
+      if (resp.ok) {
+        setResendCount(resendCount - 1);
+        setOtp(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+        
+        toast({
+          title: "OTP Resent",
+          description: "A new verification code has been sent to your email",
+        });
+      } else {
+        const errorData = await resp.json();
+        toast({
+          title: "Failed to resend",
+          description: errorData.message || errorData.error,
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleChangeEmail = () => {
@@ -96,7 +155,7 @@ const OTPVerification = () => {
     setPendingEmail(newEmail);
     setNewEmail("");
     setShowChangeEmail(false);
-    setOtp(["", "", "", ""]);
+    setOtp(["", "", "", "", "", ""]);
     inputRefs.current[0]?.focus();
 
     toast({
