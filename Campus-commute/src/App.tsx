@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { RouteProvider } from "@/contexts/RouteContext";
 
 // Pages
 import Onboarding from "./pages/Onboarding";
@@ -36,7 +37,6 @@ import About from "./pages/About";
 import Support from "./pages/Support";
 import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
-import CampusCommuteApp from "./pages/CampusCommuteApp";
 
 const queryClient = new QueryClient();
 
@@ -53,10 +53,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+        <RouteProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
             <Routes>
               {/* Onboarding */}
               <Route path="/" element={<Onboarding />} />
@@ -75,7 +76,7 @@ const App = () => (
               
               {/* Main App - Student */}
               <Route path="/route-selection" element={<RouteSelection />} />
-              <Route path="/home" element={<CampusCommuteApp />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/change-password" element={<ChangePassword />} />
@@ -96,17 +97,15 @@ const App = () => (
               {/* Admin */}
               <Route path="/admin" element={<AdminRoute element={<AdminPanel />} />} />
               
-              {/* Tracker Demo */}
-              <Route path="/live-tracker" element={<CampusCommuteApp />} />
-              
               {/* Catch-all */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+      </RouteProvider>
+    </AuthProvider>
+  </ThemeProvider>
+</QueryClientProvider>
 );
 
 export default App;
