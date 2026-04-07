@@ -75,7 +75,7 @@ const App = () => (
               
               {/* Main App - Student */}
               <Route path="/route-selection" element={<RouteSelection />} />
-              <Route path="/home" element={<Home />} />
+              <Route path="/home" element={<CampusCommuteApp />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/change-password" element={<ChangePassword />} />
