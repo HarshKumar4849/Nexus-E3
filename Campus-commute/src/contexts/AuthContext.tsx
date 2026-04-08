@@ -18,6 +18,8 @@ interface UserData {
   profileImage?: string;
   busNumber?: string;
   licenseId?: string;
+  registrationNo?: string;
+  busStop?: string;
 }
 
 interface AuthContextType {
