@@ -16,7 +16,7 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState(["", "", "", ""]);
   const [resendCount, setResendCount] = useState(3);
 
   const handleSendOTP = () => {
@@ -37,10 +37,10 @@ const ForgotPassword = () => {
 
   const handleVerifyOTP = () => {
     const fullOtp = otp.join("");
-    if (fullOtp.length !== 6) {
+    if (fullOtp.length !== 4) {
       toast({
         title: "Invalid OTP",
-        description: "Please enter all 6 digits",
+        description: "Please enter all 4 digits",
         variant: "destructive",
       });
       return;
@@ -51,7 +51,7 @@ const ForgotPassword = () => {
   const handleResend = () => {
     if (resendCount <= 0) return;
     setResendCount(resendCount - 1);
-    setOtp(["", "", "", "", "", ""]);
+    setOtp(["", "", "", ""]);
     toast({
       title: "OTP Resent",
       description: "A new verification code has been sent",
@@ -96,7 +96,7 @@ const ForgotPassword = () => {
           ) : (
             <>
               <p className="text-muted-foreground text-center mb-8">
-                Enter the 6-digit code sent to {email}
+                Enter the 4-digit code sent to {email}
               </p>
               <div className="flex justify-center gap-4 mb-8">
                 {otp.map((digit, index) => (

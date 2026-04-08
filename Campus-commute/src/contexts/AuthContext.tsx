@@ -31,7 +31,7 @@ interface AuthContextType {
   setPendingRole: (role: UserRole) => void;
   setPendingEmail: (email: string) => void;
   setPendingUserData: (data: Partial<UserData>) => void;
-  completeSignup: (data: Partial<UserData>) => Promise<boolean>;
+  completeSignup: (data: Partial<UserData>) => void;
   updateUser: (data: Partial<UserData>) => void;
   setSelectedRoute: (route: number) => void;
 }
@@ -46,31 +46,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>({});
 
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/user/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      
-      if (!response.ok) {
-        return false;
-      }
-      
-      const data = await response.json();
-      
-      setIsAuthenticated(true);
-      setUser({
-        email: data.user.email,
-        fullName: data.user.fullname || data.user.fullName || "",
-        role: role,
-        password: password,
-      });
-      return true;
-    } catch (err) {
-      console.error(err);
+    // Get account from localStorage
+    const registeredAccounts = JSON.parse(
+      localStorage.getItem("campus-commute-accounts") || "[]"
+    );
+    const account = registeredAccounts.find(
+      (acc: any) => acc.email === email && acc.role === role && acc.password === password
+    );
+
+    if (!account) {
       return false;
     }
+
+    setIsAuthenticated(true);
+    setUser({
+      email: account.email,
+      fullName: account.fullName,
+      role: account.role,
+      password: account.password,
+      yearBatch: account.yearBatch,
+      routeNo: account.routeNo,
+      timing: account.timing,
+      selectedRoute: account.selectedRoute || 1,
+      phoneNumber: account.phoneNumber,
+      branch: account.branch,
+      course: account.course,
+      semester: account.semester,
+      profileImage: account.profileImage,
+      busNumber: account.busNumber,
+      licenseId: account.licenseId,
+    });
+    return true;
   };
 
   const logout = () => {
@@ -81,43 +87,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setPendingUserData({});
   };
 
-  const completeSignup = async (data: Partial<UserData>) => {
-    try {
-      const payload = {
-        fullname: pendingUserData.fullName || pendingUserData.email || "",
-        email: pendingEmail,
-        password: pendingUserData.password,
-        regdNo: pendingUserData.yearBatch || "N/A"
-      };
-
-      const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/user/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      
-      const responseData = await resp.json();
-
-      if (resp.ok) {
-        setIsAuthenticated(true);
-        setUser({
-          email: pendingEmail,
-          fullName: pendingUserData.fullName || "",
-          role: pendingRole,
-          yearBatch: pendingUserData.yearBatch,
-          routeNo: pendingUserData.routeNo,
-          timing: pendingUserData.timing,
-          ...data,
-        });
-        setPendingEmail("");
-        setPendingUserData({});
-        return { success: true };
-      }
-      return { success: false, error: responseData.error || responseData.message || "Registration failed" };
-    } catch(err) {
-      console.error(err);
-      return { success: false, error: "Network error" };
-    }
+  const completeSignup = (data: Partial<UserData>) => {
+    setIsAuthenticated(true);
+    setUser({
+      email: pendingEmail,
+      fullName: pendingUserData.fullName || "",
+      role: pendingRole,
+      yearBatch: pendingUserData.yearBatch,
+      routeNo: pendingUserData.routeNo,
+      timing: pendingUserData.timing,
+      ...data,
+    });
+    setPendingEmail("");
+    setPendingUserData({});
   };
 
   const updateUser = (data: Partial<UserData>) => {
