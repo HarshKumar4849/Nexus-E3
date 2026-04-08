@@ -34,15 +34,13 @@ const countryCodes = ["+91", "+1", "+44", "+61", "+971"];
 const nameSchema = z.string().min(2, "Minimum 2 characters").regex(/^[a-zA-Z\s]+$/, "Letters only");
 const phoneSchema = z.string().regex(/^\d{10}$/, "Must be exactly 10 digits");
 
-const calcYearRange = (c: string) => {
-  if (!c || !(c in courseConfig)) return "";
-  const yr = new Date().getFullYear();
-  return `${yr} – ${yr + courseConfig[c as CourseType].duration}`;
+const getSemesterOptions = (c: string): string[] => {
+  if (!c || !(c in courseConfig)) return [];
+  const total = courseConfig[c as CourseType].semesters;
+  return Array.from({ length: total }, (_, i) => `Sem ${i + 1}`);
 };
-const calcSemesters = (c: string) => {
-  if (!c || !(c in courseConfig)) return "";
-  return String(courseConfig[c as CourseType].semesters);
-};
+
+const yearOptions = ["2024", "2025", "2026", "2027", "2028", "2029", "2030", "2031"];
 
 // ─── Photo Options Sheet ──────────────────────────────────────────────────────
 
@@ -298,20 +296,7 @@ const StyledInput = ({ label, value, onChange, placeholder, error, disabled = fa
   </div>
 );
 
-// ─── Auto-Calculated Chip ─────────────────────────────────────────────────────
-
-const CalcChip = ({ label, value, icon: Icon }) => (
-  <div className="space-y-1.5">
-    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">{label}</label>
-    <div className="flex items-center gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/50 rounded-2xl px-4 py-3.5">
-      <Icon className="w-4 h-4 text-teal-600 dark:text-teal-400 flex-shrink-0" />
-      <span className={`font-bold ${value ? "text-teal-700 dark:text-teal-300" : "text-gray-400 italic text-sm font-normal"}`}>
-        {value || "Select a course first"}
-      </span>
-      {value && <CheckCircle2 className="w-4 h-4 text-teal-500 ml-auto flex-shrink-0" />}
-    </div>
-  </div>
-);
+// CalcChip removed — semester and year are now selectable dropdowns
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
@@ -364,8 +349,8 @@ const Profile = () => {
     setCourse(c);
     setBranchSelect("");
     setBranchText("");
-    setSemester(calcSemesters(c));
-    setYearBatch(calcYearRange(c));
+    setSemester("");
+    setYearBatch("");
   };
 
   const validateAndSave = () => {
@@ -403,8 +388,8 @@ const Profile = () => {
     setRegNo(user?.registrationNo || "");
     setPhone(user?.phoneNumber || "");
     setCourse(user?.course || "");
-    setSemester(user?.semester || calcSemesters(user?.course || ""));
-    setYearBatch(user?.yearBatch || calcYearRange(user?.course || ""));
+    setSemester(user?.semester || "");
+    setYearBatch(user?.yearBatch || "");
     setBusStop(user?.busStop || "");
     setErrors({});
     setIsEditing(true);
@@ -430,8 +415,8 @@ const Profile = () => {
             onClick={isEditing ? validateAndSave : startEditing}
             className={`text-sm font-bold px-4 py-2 rounded-full transition-all ${
               isEditing
-                ? "bg-teal-500 text-white hover:bg-teal-600 shadow-lg shadow-teal-500/30"
-                : "text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20"
+                ? "bg-[#0E2A2F] text-white hover:bg-[#0E2A2F]/90 shadow-lg shadow-[#0E2A2F]/30"
+                : "text-[#0E2A2F] dark:text-teal-400 hover:bg-[#0E2A2F]/10 dark:hover:bg-teal-900/20"
             }`}
           >
             {isEditing ? "Save" : "Edit"}
@@ -442,10 +427,10 @@ const Profile = () => {
       <div className="max-w-[430px] mx-auto pb-24">
 
         {/* ── Hero Avatar Section ────────────────────────────────────── */}
-        <div className="relative bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-700 pt-10 pb-20 px-6 text-center overflow-hidden">
+        <div className="relative pt-10 pb-20 px-6 text-center overflow-hidden" style={{ background: 'linear-gradient(135deg, #0E2A2F 0%, #133338 50%, #0E2A2F 100%)' }}>
           {/* Decorative blobs */}
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -bottom-5 -left-5 w-32 h-32 rounded-full bg-white/10 blur-xl" />
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 blur-2xl" />
+          <div className="absolute -bottom-5 -left-5 w-32 h-32 rounded-full bg-white/5 blur-xl" />
 
           <div className="relative inline-block">
             {/* Ring animation */}
@@ -459,9 +444,9 @@ const Profile = () => {
             {isEditing ? (
               <button
                 onClick={() => setShowPhotoOptions(true)}
-                className="absolute -bottom-1 -right-1 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-teal-200 hover:scale-110 transition-transform"
+                className="absolute -bottom-1 -right-1 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-[#0E2A2F]/30 hover:scale-110 transition-transform"
               >
-                <Camera className="w-4 h-4 text-teal-600" />
+                <Camera className="w-4 h-4 text-[#0E2A2F]" />
               </button>
             ) : (
               profileImage && (
@@ -477,7 +462,7 @@ const Profile = () => {
 
           <div className="mt-4">
             <h2 className="text-xl font-bold text-white">{user?.fullName || "Your Name"}</h2>
-            <p className="text-teal-100 text-sm mt-0.5">{user?.email}</p>
+            <p className="text-white/60 text-sm mt-0.5">{user?.email}</p>
             {user?.course && (
               <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 backdrop-blur px-3 py-1 rounded-full">
                 <BookOpen className="w-3.5 h-3.5 text-white" />
@@ -617,10 +602,25 @@ const Profile = () => {
                 />
               )}
 
-              {/* Auto-calculated chips */}
+              {/* Semester & Year Dropdowns */}
               <div className="grid grid-cols-2 gap-3">
-                <CalcChip label="Total Semesters" value={semester ? `${semester} Sems` : ""} icon={Calendar} />
-                <CalcChip label="Batch Year" value={yearBatch} icon={Calendar} />
+                <StyledSelect
+                  label="Semester"
+                  value={semester}
+                  onChange={setSemester}
+                  options={getSemesterOptions(course)}
+                  placeholder={course ? "Select" : "Pick course"}
+                  disabled={!course}
+                  icon={Calendar}
+                />
+                <StyledSelect
+                  label="Year"
+                  value={yearBatch}
+                  onChange={setYearBatch}
+                  options={yearOptions}
+                  placeholder="Select year"
+                  icon={Calendar}
+                />
               </div>
 
               {/* Commute */}
@@ -645,7 +645,7 @@ const Profile = () => {
                 </button>
                 <button
                   onClick={validateAndSave}
-                  className="py-3.5 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 hover:brightness-105 transition-all"
+                  className="py-3.5 rounded-2xl text-white font-bold shadow-lg shadow-[#0E2A2F]/30 hover:brightness-110 transition-all" style={{ background: '#0E2A2F' }}
                 >
                   Save Changes
                 </button>
@@ -659,7 +659,7 @@ const Profile = () => {
           <div className="mx-4 mt-4">
             <button
               onClick={startEditing}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold text-base shadow-lg shadow-teal-500/30 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base shadow-lg shadow-[#0E2A2F]/30 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2" style={{ background: '#0E2A2F' }}
             >
               <Edit2 className="w-4 h-4" />
               Edit Profile
