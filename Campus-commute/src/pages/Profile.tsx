@@ -1,76 +1,357 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
-import { User, Edit2 } from "lucide-react";
-import FormInput from "@/components/FormInput";
-import GradientButton from "@/components/GradientButton";
-import BackButton from "@/components/BackButton";
-import ImageUploadWithCrop from "@/components/ImageUploadWithCrop";
-import PhotoViewer from "@/components/PhotoViewer";
-import PhotoOptionsSheet from "@/components/PhotoOptionsSheet";
+import {
+  User, Edit2, Camera, ChevronRight, Lock, Phone,
+  BookOpen, MapPin, Hash, Calendar, Layers, CheckCircle2,
+  ArrowLeft, X, ZoomIn, ZoomOut, RotateCw, Image, Smile, Trash2
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-const nameSchema = z.string()
-  .min(2, "Name must be at least 2 characters")
-  .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters");
-
-const phoneSchema = z.string().regex(/^\d{10}$/, "Phone number must be exactly 10 digits");
+// ─── Data Config ─────────────────────────────────────────────────────────────
 
 const courses = ["B.Tech", "BBA", "BCA", "M.Tech", "MBA"] as const;
 type CourseType = typeof courses[number];
 
 const courseConfig: Record<CourseType, { duration: number; semesters: number; branches: string[] }> = {
   "B.Tech": { duration: 4, semesters: 8, branches: ["CSE", "ECE", "ME", "EE", "CE", "Other"] },
-  "BBA": { duration: 3, semesters: 6, branches: ["General", "Finance", "Marketing", "HR", "Other"] },
-  "BCA": { duration: 3, semesters: 6, branches: ["General", "Data Science", "Web Development", "Other"] },
+  "BBA":    { duration: 3, semesters: 6, branches: ["General", "Finance", "Marketing", "HR", "Other"] },
+  "BCA":    { duration: 3, semesters: 6, branches: ["General", "Data Science", "Web Development", "Other"] },
   "M.Tech": { duration: 2, semesters: 4, branches: ["CSE", "ECE", "ME", "EE", "CE", "Other"] },
-  "MBA": { duration: 2, semesters: 4, branches: ["Finance", "Marketing", "HR", "Operations", "Other"] },
+  "MBA":    { duration: 2, semesters: 4, branches: ["Finance", "Marketing", "HR", "Operations", "Other"] },
 };
 
-const busStops = ["Trisulia", "Damana", "Patia", "Fire Station", "ITER"];
-const countryCodes = ["+91", "+1", "+44"];
+const busStops = [
+  "Trisulia", "CDA Naibandha", "Bijupattnaik Park", "Aswini Hospital",
+  "Satichaura", "Badambadi", "Link Road", "Press Chhaka", "Pahala",
+  "Patia", "Kanan Vihar", "Shree Vihar", "Jaydevvihar", "Sastri Nagar",
+  "Damana", "Railway Stadium", "Fire Station", "Baramunda", "ITER"
+];
 
-const calculateYearRange = (courseStr: string) => {
-  if (!courseStr || !(courseStr in courseConfig)) return "";
-  const currentYear = new Date().getFullYear();
-  const duration = courseConfig[courseStr as CourseType].duration;
-  return `${currentYear} - ${currentYear + duration}`;
+const countryCodes = ["+91", "+1", "+44", "+61", "+971"];
+
+const nameSchema = z.string().min(2, "Minimum 2 characters").regex(/^[a-zA-Z\s]+$/, "Letters only");
+const phoneSchema = z.string().regex(/^\d{10}$/, "Must be exactly 10 digits");
+
+const calcYearRange = (c: string) => {
+  if (!c || !(c in courseConfig)) return "";
+  const yr = new Date().getFullYear();
+  return `${yr} – ${yr + courseConfig[c as CourseType].duration}`;
+};
+const calcSemesters = (c: string) => {
+  if (!c || !(c in courseConfig)) return "";
+  return String(courseConfig[c as CourseType].semesters);
 };
 
-const calculateSemester = (courseStr: string) => {
-  if (!courseStr || !(courseStr in courseConfig)) return "";
-  return courseConfig[courseStr as CourseType].semesters.toString();
+// ─── Photo Options Sheet ──────────────────────────────────────────────────────
+
+const PhotoSheet = ({ open, onClose, onCamera, onGallery, onAvatar, onDelete, hasPhoto }) => {
+  if (!open) return null;
+  const options = [
+    { id: "camera",  label: "Take Photo",    icon: Camera, action: onCamera },
+    { id: "gallery", label: "Choose from Gallery", icon: Image, action: onGallery },
+    { id: "avatar",  label: "Pick an Avatar", icon: Smile, action: onAvatar },
+  ];
+  return (
+    <>
+      <div onClick={onClose} className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" />
+      <div className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white dark:bg-gray-900 rounded-t-3xl z-50 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+        </div>
+        <div className="px-6 pb-8">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-5 text-center">Profile Photo</h2>
+          <div className="space-y-1">
+            {options.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => { opt.action(); onClose(); }}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center">
+                  <opt.icon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                </div>
+                <span className="font-medium text-gray-800 dark:text-gray-200">{opt.label}</span>
+                <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
+              </button>
+            ))}
+            {hasPhoto && (
+              <button
+                onClick={() => { onDelete(); onClose(); }}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-500" />
+                </div>
+                <span className="font-medium text-red-500">Remove Photo</span>
+              </button>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full mt-5 py-3.5 rounded-2xl border-2 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
+  );
 };
+
+// ─── Crop/Zoom Overlay ────────────────────────────────────────────────────────
+
+const CropOverlay = ({ onSave, onClose }) => {
+  const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [image, setImage] = useState<string | null>(null);
+  const inputRef = useState<HTMLInputElement | null>(null);
+
+  const triggerInput = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => setImage(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleSave = () => {
+    if (!image) return;
+    onSave(image);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+            <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+          <span className="font-bold text-gray-900 dark:text-white">Adjust Photo</span>
+          <button
+            onClick={handleSave}
+            disabled={!image}
+            className="text-teal-600 dark:text-teal-400 font-bold text-sm disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Preview */}
+          <div className="flex justify-center">
+            <div className="w-36 h-36 rounded-full overflow-hidden border-4 border-teal-500 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              {image ? (
+                <img
+                  src={image}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                  style={{ transform: `scale(${scale}) rotate(${rotation}deg)` }}
+                />
+              ) : (
+                <User className="w-16 h-16 text-gray-400" />
+              )}
+            </div>
+          </div>
+
+          {!image ? (
+            <button
+              onClick={triggerInput}
+              className="w-full py-3.5 rounded-2xl border-2 border-dashed border-teal-400 text-teal-600 dark:text-teal-400 font-semibold hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
+            >
+              Choose Image
+            </button>
+          ) : (
+            <>
+              {/* Zoom */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>Zoom</span>
+                  <span>{(scale * 100).toFixed(0)}%</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ZoomOut className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <input
+                    type="range" min="0.5" max="3" step="0.05" value={scale}
+                    onChange={e => setScale(Number(e.target.value))}
+                    className="flex-1 accent-teal-500"
+                  />
+                  <ZoomIn className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                </div>
+              </div>
+
+              {/* Rotation */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>Rotation</span>
+                  <span>{rotation}°</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range" min="0" max="360" step="15" value={rotation}
+                    onChange={e => setRotation(Number(e.target.value))}
+                    className="flex-1 accent-teal-500"
+                  />
+                  <button
+                    onClick={() => setRotation(r => (r + 90) % 360)}
+                    className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200"
+                  >
+                    <RotateCw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={triggerInput}
+                className="w-full py-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-gray-50"
+              >
+                Choose Different
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Field Row (View Mode) ────────────────────────────────────────────────────
+
+const InfoRow = ({ icon: Icon, label, value, accent = false }) => (
+  <div className="flex items-center gap-4 px-5 py-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${accent ? "bg-teal-50 dark:bg-teal-900/30" : "bg-gray-50 dark:bg-gray-800"}`}>
+      <Icon className={`w-5 h-5 ${accent ? "text-teal-600 dark:text-teal-400" : "text-gray-500 dark:text-gray-400"}`} />
+    </div>
+    <div className="min-w-0 flex-1">
+      <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wide mb-0.5">{label}</p>
+      <p className="text-gray-900 dark:text-white font-semibold truncate">{value || <span className="text-gray-400 font-normal italic">Not set</span>}</p>
+    </div>
+  </div>
+);
+
+// ─── Styled Select ────────────────────────────────────────────────────────────
+
+const StyledSelect = ({ label, value, onChange, options, placeholder = "Select…", disabled = false, icon: Icon }) => (
+  <div className="space-y-1.5">
+    {label && <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">{label}</label>}
+    <div className="relative">
+      {Icon && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+          <Icon className="w-4 h-4 text-gray-400" />
+        </div>
+      )}
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className={`w-full appearance-none bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl py-3.5 pr-10 text-gray-900 dark:text-white focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${Icon ? "pl-11" : "pl-4"}`}
+      >
+        <option value="">{placeholder}</option>
+        {options.map(o => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+      <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 w-4 h-4 text-gray-400 pointer-events-none" />
+    </div>
+  </div>
+);
+
+// ─── Styled Input ─────────────────────────────────────────────────────────────
+
+const StyledInput = ({ label, value, onChange, placeholder, error, disabled = false, readOnly = false, icon: Icon, type = "text" }) => (
+  <div className="space-y-1.5">
+    {label && <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">{label}</label>}
+    <div className="relative">
+      {Icon && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+          <Icon className="w-4 h-4 text-gray-400" />
+        </div>
+      )}
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        readOnly={readOnly}
+        className={`w-full bg-gray-50 dark:bg-gray-800 border rounded-2xl py-3.5 pr-4 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 transition-all
+          ${Icon ? "pl-11" : "pl-4"}
+          ${error ? "border-red-400 focus:border-red-400 focus:ring-red-400/20" : "border-gray-200 dark:border-gray-700 focus:border-teal-400 focus:ring-teal-400/20"}
+          ${(disabled || readOnly) ? "opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-900" : ""}`}
+      />
+      {(disabled || readOnly) && (
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+          <Lock className="w-4 h-4 text-gray-400" />
+        </div>
+      )}
+    </div>
+    {error && <p className="text-xs text-red-500 dark:text-red-400 px-1 font-medium">{error}</p>}
+  </div>
+);
+
+// ─── Auto-Calculated Chip ─────────────────────────────────────────────────────
+
+const CalcChip = ({ label, value, icon: Icon }) => (
+  <div className="space-y-1.5">
+    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">{label}</label>
+    <div className="flex items-center gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/50 rounded-2xl px-4 py-3.5">
+      <Icon className="w-4 h-4 text-teal-600 dark:text-teal-400 flex-shrink-0" />
+      <span className={`font-bold ${value ? "text-teal-700 dark:text-teal-300" : "text-gray-400 italic text-sm font-normal"}`}>
+        {value || "Select a course first"}
+      </span>
+      {value && <CheckCircle2 className="w-4 h-4 text-teal-500 ml-auto flex-shrink-0" />}
+    </div>
+  </div>
+);
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+const SectionHeader = ({ title }) => (
+  <div className="flex items-center gap-3 mb-4">
+    <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest whitespace-nowrap">{title}</span>
+    <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+  </div>
+);
+
+// ─── Main Profile Component ───────────────────────────────────────────────────
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [showImageUpload, setShowImageUpload] = useState(false);
-  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
-  const [showPhotoViewer, setShowPhotoViewer] = useState(false);
-  
-  const [fullName, setFullName] = useState(user?.fullName || "");
-  const [email] = useState(user?.email || ""); // Email is strictly readOnly
-  const [registrationNo, setRegistrationNo] = useState(user?.registrationNo || "");
-  const [countryCode, setCountryCode] = useState("+91");
-  const [phone, setPhone] = useState(user?.phoneNumber || "");
-  
-  const [course, setCourse] = useState(user?.course || "");
-  const [branchSelect, setBranchSelect] = useState("");
-  const [branchText, setBranchText] = useState("");
 
-  const [semester, setSemester] = useState(user?.semester || "");
-  const [yearBatch, setYearBatch] = useState(user?.yearBatch || "");
-  const [busStop, setBusStop] = useState(user?.busStop || "");
-  
+  const [isEditing, setIsEditing]           = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showCropOverlay, setShowCropOverlay]   = useState(false);
+
+  // Form state
+  const [fullName, setFullName]         = useState(user?.fullName || "");
+  const [email]                         = useState(user?.email || "");
+  const [registrationNo, setRegNo]      = useState(user?.registrationNo || "");
+  const [countryCode, setCountryCode]   = useState("+91");
+  const [phone, setPhone]               = useState(user?.phoneNumber || "");
+  const [course, setCourse]             = useState(user?.course || "");
+  const [branchSelect, setBranchSelect] = useState("");
+  const [branchText, setBranchText]     = useState("");
+  const [semester, setSemester]         = useState(user?.semester || "");
+  const [yearBatch, setYearBatch]       = useState(user?.yearBatch || "");
+  const [busStop, setBusStop]           = useState(user?.busStop || "");
   const [profileImage, setProfileImage] = useState(user?.profileImage || "");
-  const [errors, setErrors] = useState<{ fullName?: string; phone?: string }>({});
+  const [errors, setErrors]             = useState<{ fullName?: string; phone?: string }>({});
 
   useEffect(() => {
-    // Initialize branch selection from user data context
     if (user?.branch) {
-      if (user.course && courseConfig[user.course as CourseType]?.branches.includes(user.branch)) {
+      const branches = course ? courseConfig[course as CourseType]?.branches || [] : [];
+      if (branches.includes(user.branch)) {
         setBranchSelect(user.branch);
       } else {
         setBranchSelect("Other");
@@ -79,389 +360,329 @@ const Profile = () => {
     }
   }, [user]);
 
-  const handleCourseChange = (selectedCourse: string) => {
-    setCourse(selectedCourse);
+  const handleCourseChange = (c: string) => {
+    setCourse(c);
     setBranchSelect("");
     setBranchText("");
-    
-    // Auto-calculate semester and year range
-    const newSem = calculateSemester(selectedCourse);
-    const newRange = calculateYearRange(selectedCourse);
-    setSemester(newSem);
-    setYearBatch(newRange);
+    setSemester(calcSemesters(c));
+    setYearBatch(calcYearRange(c));
   };
 
-  const handleSave = () => {
+  const validateAndSave = () => {
     const newErrors: { fullName?: string; phone?: string } = {};
-
-    try {
-      nameSchema.parse(fullName);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        newErrors.fullName = err.errors[0]?.message;
-      }
-    }
-
+    try { nameSchema.parse(fullName); } catch (e: any) { newErrors.fullName = e.errors?.[0]?.message; }
     if (phone) {
-      try {
-        const cleanPhone = phone.replace(/\D/g, "");
-        phoneSchema.parse(cleanPhone);
-      } catch (err) {
-        if (err instanceof z.ZodError) {
-          newErrors.phone = err.errors[0]?.message;
-        }
-      }
+      try { phoneSchema.parse(phone.replace(/\D/g, "")); } catch (e: any) { newErrors.phone = e.errors?.[0]?.message; }
     }
+    if (Object.keys(newErrors).length) { setErrors(newErrors); return; }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    const finalBranch = branchSelect === "Other" ? branchText : branchSelect;
-
-    updateUser({ 
-      fullName, 
-      registrationNo,
-      phoneNumber: phone,
-      branch: finalBranch,
-      course,
-      semester: semester,
-      yearBatch,
-      busStop,
-      profileImage
+    updateUser({
+      fullName, registrationNo,
+      phoneNumber: phone, branch: branchSelect === "Other" ? branchText : branchSelect,
+      course, semester, yearBatch, busStop, profileImage,
     });
-    
     setIsEditing(false);
-    toast({
-      title: "Profile Updated",
-      description: "Your profile has been successfully updated",
-    });
+    setErrors({});
+    toast({ title: "✅ Profile Updated", description: "Your changes have been saved." });
   };
 
-  const handleImageSelected = (imageData: string) => {
-    setProfileImage(imageData);
-    setShowImageUpload(false);
-    toast({
-      title: "Picture Updated",
-      description: "Your profile picture has been updated",
-    });
+  const handleImageSaved = (img: string) => {
+    setProfileImage(img);
+    setShowCropOverlay(false);
+    toast({ title: "📸 Photo Updated" });
   };
 
   const handleDeletePhoto = () => {
     setProfileImage("");
     updateUser({ profileImage: "" });
-    toast({
-      title: "Photo Deleted",
-      description: "Your profile picture has been removed",
-    });
+    toast({ title: "Photo removed" });
   };
 
+  const startEditing = () => {
+    setFullName(user?.fullName || "");
+    setRegNo(user?.registrationNo || "");
+    setPhone(user?.phoneNumber || "");
+    setCourse(user?.course || "");
+    setSemester(user?.semester || calcSemesters(user?.course || ""));
+    setYearBatch(user?.yearBatch || calcYearRange(user?.course || ""));
+    setBusStop(user?.busStop || "");
+    setErrors({});
+    setIsEditing(true);
+  };
+
+  const currentBranchOptions = course ? (courseConfig[course as CourseType]?.branches || []) : [];
+
   return (
-    <div className="min-h-screen bg-muted/50 pb-12">
-      <div className="max-w-[430px] md:max-w-5xl mx-auto min-h-screen md:min-h-[auto] bg-background md:mt-8 md:rounded-3xl shadow-sm relative overflow-hidden">
-        <div className="flex flex-col px-6 md:px-10 py-6 md:py-10">
-          <div className="mb-4 hidden md:block">
-            <BackButton to="/home" />
-          </div>
-          <div className="md:hidden">
-            <BackButton to="/home" />
-          </div>
-          
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground text-center md:text-left mb-8 md:mb-10 pt-4 md:pt-0">
-            {isEditing ? "Edit Profile" : "User Profile"}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+        <div className="max-w-[430px] mx-auto flex items-center justify-between px-5 h-14">
+          <button
+            onClick={() => isEditing ? setIsEditing(false) : window.history.back()}
+            className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center"
+          >
+            {isEditing ? <X className="w-4 h-4 text-gray-600 dark:text-gray-400" /> : <ArrowLeft className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
+          </button>
+          <h1 className="text-base font-bold text-gray-900 dark:text-white">
+            {isEditing ? "Edit Profile" : "My Profile"}
           </h1>
+          <button
+            onClick={isEditing ? validateAndSave : startEditing}
+            className={`text-sm font-bold px-4 py-2 rounded-full transition-all ${
+              isEditing
+                ? "bg-teal-500 text-white hover:bg-teal-600 shadow-lg shadow-teal-500/30"
+                : "text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20"
+            }`}
+          >
+            {isEditing ? "Save" : "Edit"}
+          </button>
+        </div>
+      </div>
 
-          <div className={isEditing ? "grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12" : "space-y-6 max-w-2xl mx-auto"}>
-            
-            {/* Left Card: Avatar & Basic Details */}
-            <div className={isEditing ? "col-span-1 md:col-span-5 lg:col-span-4 flex flex-col items-center md:items-start" : "flex flex-col items-center"}>
-              
-              {/* Avatar Section */}
-              <div className="relative mb-8 text-center md:text-left w-full flex justify-center md:justify-start">
-                <div className="relative inline-block">
-                  <button 
-                    onClick={() => profileImage && setShowPhotoViewer(true)}
-                    className={`w-28 h-28 md:w-36 md:h-36 rounded-full bg-muted flex items-center justify-center overflow-hidden border-4 border-background shadow-md ${profileImage ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-                  >
-                    {profileImage ? (
-                      <img 
-                        src={profileImage} 
-                        alt="Profile" 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User className="w-12 h-12 md:w-16 md:h-16 text-muted-foreground" />
-                    )}
-                  </button>
-                  {isEditing && (
-                    <button 
-                      onClick={() => setShowPhotoOptions(true)}
-                      className="absolute bottom-0 right-0 md:bottom-2 md:right-2 w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors"
-                    >
-                      <Edit2 className="w-5 h-5 text-primary-foreground" />
-                    </button>
-                  )}
-                </div>
-              </div>
+      <div className="max-w-[430px] mx-auto pb-24">
 
-              {/* Basic Non-Editable details strictly below image on wide screens */}
-              {isEditing && (
-                <div className="w-full space-y-5">
-                  <FormInput
-                    label="Full Name"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    error={errors.fullName}
-                  />
+        {/* ── Hero Avatar Section ────────────────────────────────────── */}
+        <div className="relative bg-gradient-to-br from-teal-500 via-teal-600 to-emerald-700 pt-10 pb-20 px-6 text-center overflow-hidden">
+          {/* Decorative blobs */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+          <div className="absolute -bottom-5 -left-5 w-32 h-32 rounded-full bg-white/10 blur-xl" />
 
-                  <div>
-                    <label className="block text-sm text-muted-foreground mb-2 font-medium">Email (Non-editable)</label>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={email}
-                      className="w-full bg-muted/70 border border-muted opacity-70 cursor-not-allowed rounded-2xl p-4 text-foreground focus:outline-none"
-                    />
-                  </div>
-
-                  {user?.role === "student" && (
-                    <FormInput
-                      label="Registration No."
-                      placeholder="Enter Registration No."
-                      value={registrationNo}
-                      onChange={(e) => setRegistrationNo(e.target.value)}
-                    />
-                  )}
-                </div>
-              )}
+          <div className="relative inline-block">
+            {/* Ring animation */}
+            <div className={`absolute inset-0 rounded-full border-4 border-white/40 scale-110 ${isEditing ? "animate-pulse" : ""}`} />
+            <div className="w-28 h-28 rounded-full border-4 border-white shadow-2xl overflow-hidden bg-gray-200 flex items-center justify-center">
+              {profileImage
+                ? <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                : <User className="w-14 h-14 text-gray-400" />
+              }
             </div>
-
-            {/* Right Card: Full Form Options */}
             {isEditing ? (
-              <div className="col-span-1 md:col-span-7 lg:col-span-8 flex flex-col space-y-6">
-                
-                {user?.role === "student" && (
-                  <div className="bg-muted/30 p-6 md:p-8 rounded-3xl border border-muted/50 space-y-6">
-                    <h2 className="text-xl font-semibold mb-4 text-foreground">Contact & Academic Info</h2>
-
-                    {/* Phone Number Container */}
-                    <div>
-                      <label className="block text-sm text-muted-foreground mb-2 font-medium">Phone Number</label>
-                      <div className="flex gap-3">
-                        <select
-                          value={countryCode}
-                          onChange={(e) => setCountryCode(e.target.value)}
-                          className="bg-muted border border-transparent rounded-2xl p-4 text-foreground focus:border-primary/30 focus:outline-none w-[100px]"
-                        >
-                          {countryCodes.map(code => (
-                            <option key={code} value={code}>{code}</option>
-                          ))}
-                        </select>
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            placeholder="10-digit number"
-                            value={phone}
-                            autoComplete="off"
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/\D/g, "");
-                              setPhone(val.slice(0, 15)); // Allowing typed val, validation handles strict len
-                            }}
-                            className={`w-full bg-muted border ${errors.phone ? 'border-destructive' : 'border-transparent'} rounded-2xl p-4 text-foreground focus:border-primary/30 focus:outline-none transition-colors`}
-                          />
-                          {errors.phone && <p className="text-sm text-destructive mt-1 ml-2">{errors.phone}</p>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bus Stop Dropdown */}
-                    <div>
-                      <label className="block text-sm text-muted-foreground mb-2 font-medium">Bus Stop</label>
-                      <select 
-                        value={busStop}
-                        onChange={(e) => setBusStop(e.target.value)}
-                        className="w-full bg-muted appearance-none border border-transparent rounded-2xl p-4 text-foreground focus:border-primary/30 focus:outline-none transition-colors"
-                      >
-                        <option value="">Select Bus Stop</option>
-                        {busStops.map(stop => (
-                          <option key={stop} value={stop}>{stop}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm text-muted-foreground mb-2 font-medium">Course</label>
-                        <select 
-                          value={course}
-                          onChange={(e) => handleCourseChange(e.target.value)}
-                          className="w-full bg-muted appearance-none border border-transparent rounded-2xl p-4 text-foreground focus:border-primary/30 focus:outline-none transition-colors"
-                        >
-                          <option value="">Select Course</option>
-                          {courses.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-muted-foreground mb-2 font-medium">Branch</label>
-                        <select 
-                          value={branchSelect}
-                          onChange={(e) => setBranchSelect(e.target.value)}
-                          disabled={!course}
-                          className="w-full bg-muted appearance-none border border-transparent rounded-2xl p-4 text-foreground focus:border-primary/30 focus:outline-none transition-colors disabled:opacity-50"
-                        >
-                          <option value="">Select Branch</option>
-                          {course && courseConfig[course as CourseType]?.branches.map(b => (
-                            <option key={b} value={b}>{b}</option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {branchSelect === "Other" && (
-                        <div className="sm:col-span-2 animate-in fade-in slide-in-from-top-2">
-                          <FormInput
-                            label="Specify Branch"
-                            placeholder="Enter your branch name"
-                            value={branchText}
-                            onChange={(e) => setBranchText(e.target.value)}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      {/* Auto-Calculated Form fields */}
-                      <div>
-                        <label className="block text-sm text-muted-foreground mb-2 font-medium">Total Semesters</label>
-                        <input
-                          type="text"
-                          readOnly
-                          disabled
-                          placeholder="Auto-calculated"
-                          value={semester}
-                          className="w-full bg-muted/70 border border-muted opacity-70 cursor-not-allowed rounded-2xl p-4 text-foreground focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-muted-foreground mb-2 font-medium">Academic Year</label>
-                        <input
-                          type="text"
-                          readOnly
-                          disabled
-                          placeholder="Auto-calculated"
-                          value={yearBatch}
-                          className="w-full bg-muted/70 border border-muted opacity-70 cursor-not-allowed rounded-2xl p-4 text-foreground focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                  </div>
-                )}
-                
-                <div className="pt-4 md:flex md:justify-end md:gap-4">
-                  <button 
-                    onClick={() => setIsEditing(false)}
-                    className="w-full md:w-auto px-8 py-4 bg-muted text-foreground border-transparent rounded-full font-medium hover:bg-muted/80 transition-colors mb-3 md:mb-0"
-                  >
-                    Cancel
-                  </button>
-                  <div className="md:w-[200px]">
-                    <GradientButton onClick={handleSave}>
-                      Save Changes
-                    </GradientButton>
-                  </div>
-                </div>
-              </div>
+              <button
+                onClick={() => setShowPhotoOptions(true)}
+                className="absolute -bottom-1 -right-1 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-teal-200 hover:scale-110 transition-transform"
+              >
+                <Camera className="w-4 h-4 text-teal-600" />
+              </button>
             ) : (
-              <div className="w-full space-y-4 md:space-y-6 pb-6 w-full">
-                {/* View Mode */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                  <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted">
-                    <p className="text-sm text-muted-foreground mb-1">Full Name</p>
-                    <p className="text-foreground font-medium text-lg">{user?.fullName}</p>
-                  </div>
-                  <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted">
-                    <p className="text-sm text-muted-foreground mb-1">Email</p>
-                    <p className="text-foreground font-medium text-lg break-all">{user?.email}</p>
-                  </div>
-                </div>
-                
-                {user?.role === "student" && (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted">
-                        <p className="text-sm text-muted-foreground mb-1">Registration No.</p>
-                        <p className="text-foreground font-medium text-lg">{user?.registrationNo || "Not specified"}</p>
-                      </div>
-                      <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted">
-                        <p className="text-sm text-muted-foreground mb-1">Phone Number</p>
-                        <p className="text-foreground font-medium text-lg">{user?.phoneNumber || "Not specified"}</p>
-                      </div>
-                    </div>
+              profileImage && (
+                <button
+                  onClick={() => setShowPhotoOptions(true)}
+                  className="absolute -bottom-1 -right-1 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-gray-200 hover:scale-110 transition-transform"
+                >
+                  <Edit2 className="w-4 h-4 text-gray-600" />
+                </button>
+              )
+            )}
+          </div>
 
-                    <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Course</p>
-                        <p className="text-foreground font-medium">{user?.course || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Branch</p>
-                        <p className="text-foreground font-medium">{user?.branch || "N/A"}</p>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-muted-foreground mb-1">Semesters</p>
-                        <p className="text-foreground font-medium">{user?.semester || "N/A"}</p>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-muted-foreground mb-1">Academic Year</p>
-                        <p className="text-foreground font-medium">{user?.yearBatch || "N/A"}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-muted/50 rounded-3xl p-5 md:p-6 border border-muted">
-                      <p className="text-sm text-muted-foreground mb-1">Bus Stop</p>
-                      <p className="text-foreground font-medium text-lg">{user?.busStop || "Not specified"}</p>
-                    </div>
-                  </>
-                )}
-                <div className="pt-6 flex justify-center">
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="w-full md:w-[300px] py-4 px-8 rounded-full font-medium text-lg border-2 border-primary text-primary hover:bg-primary/10 transition-colors shadow-sm"
-                  >
-                    Edit Profile
-                  </button>
-                </div>
+          <div className="mt-4">
+            <h2 className="text-xl font-bold text-white">{user?.fullName || "Your Name"}</h2>
+            <p className="text-teal-100 text-sm mt-0.5">{user?.email}</p>
+            {user?.course && (
+              <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 backdrop-blur px-3 py-1 rounded-full">
+                <BookOpen className="w-3.5 h-3.5 text-white" />
+                <span className="text-white text-xs font-semibold">{user.course} • {user?.branch || "No branch"}</span>
               </div>
             )}
           </div>
         </div>
+
+        {/* ── Card Body (overlaps hero) ──────────────────────────────── */}
+        <div className="-mt-10 mx-4 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+
+          {/* ────── VIEW MODE ──────────────────────────────────────────── */}
+          {!isEditing && (
+            <div className="p-5 space-y-3">
+              <SectionHeader title="Personal Info" />
+              <InfoRow icon={User}    label="Full Name"       value={user?.fullName} accent />
+              <InfoRow icon={Lock}    label="Email"           value={user?.email} />
+              <InfoRow icon={Hash}    label="Registration No" value={user?.registrationNo} />
+              <InfoRow icon={Phone}   label="Phone"           value={user?.phoneNumber ? `+91 ${user.phoneNumber}` : null} />
+
+              <SectionHeader title="Academic Details" />
+              <div className="grid grid-cols-2 gap-3">
+                <InfoRow icon={BookOpen}  label="Course"    value={user?.course} accent />
+                <InfoRow icon={Layers}    label="Branch"    value={user?.branch} />
+                <InfoRow icon={Calendar}  label="Semesters" value={user?.semester ? `${user.semester} Semesters` : null} accent />
+                <InfoRow icon={Calendar}  label="Batch"     value={user?.yearBatch} />
+              </div>
+
+              <SectionHeader title="Commute" />
+              <InfoRow icon={MapPin} label="Bus Stop" value={user?.busStop} accent />
+            </div>
+          )}
+
+          {/* ────── EDIT MODE ──────────────────────────────────────────── */}
+          {isEditing && (
+            <div className="p-5 space-y-5">
+
+              {/* Personal */}
+              <SectionHeader title="Personal Info" />
+
+              <StyledInput
+                label="Full Name"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="Your full name"
+                error={errors.fullName}
+                icon={User}
+              />
+
+              <StyledInput
+                label="Email Address"
+                value={email}
+                onChange={() => {}}
+                placeholder="Email"
+                icon={Lock}
+                disabled
+                readOnly
+              />
+
+              <StyledInput
+                label="Registration Number"
+                value={registrationNo}
+                onChange={e => setRegNo(e.target.value)}
+                placeholder="e.g. 2201001234"
+                icon={Hash}
+              />
+
+              {/* Phone */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-1">Phone Number</label>
+                <div className="flex gap-2">
+                  <select
+                    value={countryCode}
+                    onChange={e => setCountryCode(e.target.value)}
+                    className="w-24 appearance-none bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl py-3.5 px-3 text-gray-900 dark:text-white text-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/20 transition-all"
+                  >
+                    {countryCodes.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <div className="flex-1 relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={phone}
+                      onChange={e => {
+                        const v = e.target.value.replace(/\D/g, "").slice(0, 10);
+                        setPhone(v);
+                        if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
+                      }}
+                      placeholder="10-digit number"
+                      className={`w-full bg-gray-50 dark:bg-gray-800 border rounded-2xl py-3.5 pl-11 pr-4 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 transition-all
+                        ${errors.phone
+                          ? "border-red-400 focus:border-red-400 focus:ring-red-400/20"
+                          : "border-gray-200 dark:border-gray-700 focus:border-teal-400 focus:ring-teal-400/20"
+                        }`}
+                    />
+                    {phone.length === 10 && (
+                      <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                    )}
+                  </div>
+                </div>
+                {errors.phone && <p className="text-xs text-red-500 dark:text-red-400 px-1 font-medium">{errors.phone}</p>}
+                <p className="text-xs text-gray-400 px-1">{phone.length}/10 digits</p>
+              </div>
+
+              {/* Academic section */}
+              <SectionHeader title="Academic Details" />
+
+              <StyledSelect
+                label="Course"
+                value={course}
+                onChange={handleCourseChange}
+                options={[...courses]}
+                placeholder="Select your course"
+                icon={BookOpen}
+              />
+
+              <StyledSelect
+                label="Branch"
+                value={branchSelect}
+                onChange={setBranchSelect}
+                options={currentBranchOptions}
+                placeholder={course ? "Select branch" : "Select a course first"}
+                disabled={!course}
+                icon={Layers}
+              />
+
+              {branchSelect === "Other" && (
+                <StyledInput
+                  label="Specify Branch"
+                  value={branchText}
+                  onChange={e => setBranchText(e.target.value)}
+                  placeholder="Type your branch name"
+                  icon={Layers}
+                />
+              )}
+
+              {/* Auto-calculated chips */}
+              <div className="grid grid-cols-2 gap-3">
+                <CalcChip label="Total Semesters" value={semester ? `${semester} Sems` : ""} icon={Calendar} />
+                <CalcChip label="Batch Year" value={yearBatch} icon={Calendar} />
+              </div>
+
+              {/* Commute */}
+              <SectionHeader title="Commute" />
+
+              <StyledSelect
+                label="Boarding Bus Stop"
+                value={busStop}
+                onChange={setBusStop}
+                options={busStops}
+                placeholder="Select nearest stop"
+                icon={MapPin}
+              />
+
+              {/* Save / Cancel Buttons */}
+              <div className="pt-2 grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => { setIsEditing(false); setErrors({}); }}
+                  className="py-3.5 rounded-2xl border-2 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={validateAndSave}
+                  className="py-3.5 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold shadow-lg shadow-teal-500/30 hover:brightness-105 transition-all"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Bottom CTA (view mode) ─────────────────────────────────── */}
+        {!isEditing && (
+          <div className="mx-4 mt-4">
+            <button
+              onClick={startEditing}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white font-bold text-base shadow-lg shadow-teal-500/30 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Edit2 className="w-4 h-4" />
+              Edit Profile
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Photo Viewer Modal */}
-      <PhotoViewer imageUrl={profileImage} open={showPhotoViewer} onClose={() => setShowPhotoViewer(false)} />
-
-      {/* Photo Options Sheet */}
-      <PhotoOptionsSheet
+      {/* ── Sheets & Modals ─────────────────────────────────────────── */}
+      <PhotoSheet
         open={showPhotoOptions}
         onClose={() => setShowPhotoOptions(false)}
-        onCamera={() => setShowImageUpload(true)}
-        onGallery={() => setShowImageUpload(true)}
-        onAvatar={() => setShowImageUpload(true)}
+        onCamera={() => setShowCropOverlay(true)}
+        onGallery={() => setShowCropOverlay(true)}
+        onAvatar={() => setShowCropOverlay(true)}
         onDelete={handleDeletePhoto}
         hasPhoto={!!profileImage}
       />
 
-      {/* Image Upload with Crop */}
-      {showImageUpload && (
-        <ImageUploadWithCrop
-          onImageSave={handleImageSelected}
-          onClose={() => setShowImageUpload(false)}
+      {showCropOverlay && (
+        <CropOverlay
+          onSave={handleImageSaved}
+          onClose={() => setShowCropOverlay(false)}
         />
       )}
     </div>
