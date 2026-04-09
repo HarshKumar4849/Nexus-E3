@@ -44,7 +44,7 @@ const OTPVerification = () => {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullOtp = otp.join("");
     if (fullOtp.length !== 4) {
       toast({
@@ -55,11 +55,30 @@ const OTPVerification = () => {
       return;
     }
 
-    // Simulate OTP verification
-    navigate("/success");
+    try {
+      const response = await fetch("http://localhost:8000/user/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, otp: fullOtp }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Verification failed");
+      }
+
+      toast({ title: "Success", description: "Email Verified successfully!" });
+      navigate("/success");
+    } catch (err: any) {
+      toast({
+        title: "Verification Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (resendCount <= 0) {
       toast({
         title: "Max attempts reached",
@@ -69,21 +88,33 @@ const OTPVerification = () => {
       return;
     }
 
-    setResendCount(resendCount - 1);
-    setOtp(["", "", "", ""]);
-    inputRefs.current[0]?.focus();
-    
-    toast({
-      title: "OTP Resent",
-      description: "A new verification code has been sent to your email",
-    });
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+
+      if (!response.ok) throw new Error();
+
+      setResendCount(resendCount - 1);
+      setOtp(["", "", "", ""]);
+      inputRefs.current[0]?.focus();
+      
+      toast({
+        title: "OTP Resent",
+        description: "A new verification code has been sent to your email",
+      });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to resend OTP", variant: "destructive" });
+    }
   };
 
   const handleChangeEmail = () => {
     setShowChangeEmail(true);
   };
 
-  const handleUpdateEmail = () => {
+  const handleUpdateEmail = async () => {
     if (!newEmail.trim()) {
       toast({
         title: "Invalid email",
@@ -93,16 +124,28 @@ const OTPVerification = () => {
       return;
     }
 
-    setPendingEmail(newEmail);
-    setNewEmail("");
-    setShowChangeEmail(false);
-    setOtp(["", "", "", ""]);
-    inputRefs.current[0]?.focus();
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail }),
+      });
 
-    toast({
-      title: "Email Updated",
-      description: `Verification code sent to ${newEmail}`,
-    });
+      if (!response.ok) throw new Error();
+
+      setPendingEmail(newEmail);
+      setNewEmail("");
+      setShowChangeEmail(false);
+      setOtp(["", "", "", ""]);
+      inputRefs.current[0]?.focus();
+
+      toast({
+        title: "Email Updated",
+        description: `Verification code sent to ${newEmail}`,
+      });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to send code to new email", variant: "destructive" });
+    }
   };
 
   return (
@@ -150,6 +193,19 @@ const OTPVerification = () => {
                   Resend({resendCount} left)
                 </button>
               </p>
+
+              <button
+                onClick={() => {
+                  toast({
+                    title: "Verification Skipped",
+                    description: "You can verify your email later from settings.",
+                  });
+                  navigate("/success");
+                }}
+                className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 rounded-full transition-colors"
+              >
+                Skip Verification →
+              </button>
             </>
           ) : (
             <>

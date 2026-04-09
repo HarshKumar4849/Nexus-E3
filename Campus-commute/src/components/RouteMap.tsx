@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { io } from 'socket.io-client';
 import 'leaflet-routing-machine';
 import { useRouteContext } from '../contexts/RouteContext';
+import { useToast } from "@/hooks/use-toast";
 
 // Helper to auto-recenter the map on the live position or start position
 const RecenterMap = ({ lat, lng }: { lat: number; lng: number }) => {
@@ -100,10 +101,22 @@ const RouteMap: React.FC<any> = () => {
     const socketURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
     const socket = io(socketURL);
 
+    // Subscrube to the native tracking room on Backend
+    if (selectedRoute && selectedRoute.busNumber) {
+      socket.emit("join-bus", { busId: selectedRoute.busNumber });
+    }
+
     // Dynamic marker update
     socket.on('driver-location-update', (data: { routeId: string, lat: number, lng: number }) => {
       if (data.routeId === selectedRoute.busNumber) {
          setLiveBusPosition([data.lat, data.lng]);
+      }
+    });
+
+    // Handle dropping the bus visibility when driver initiates shutdown
+    socket.on('bus-offline', (data: { routeId: string }) => {
+      if (data.routeId === selectedRoute.busNumber) {
+         setLiveBusPosition([undefined as any, undefined as any]);
       }
     });
 

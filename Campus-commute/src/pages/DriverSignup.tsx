@@ -5,6 +5,7 @@ import MobileLayout from "@/components/MobileLayout";
 import FormInput from "@/components/FormInput";
 import GradientButton from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteContext } from "@/contexts/RouteContext";
 import { useToast } from "@/hooks/use-toast";
 
 const nameSchema = z.string()
@@ -12,12 +13,6 @@ const nameSchema = z.string()
   .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters");
 
 const emailSchema = z.string().email("Invalid email address");
-
-const routes = [
-  { value: "1", label: "Route no.1 - Kottur to Campus" },
-  { value: "2", label: "Route no.2 - Anna Nagar to Campus" },
-  { value: "3", label: "Route no.3 - T Nagar to Campus" },
-];
 
 const timings = [
   { value: "06:00 AM", label: "06:00 AM" },
@@ -28,6 +23,7 @@ const timings = [
 const DriverSignup = () => {
   const navigate = useNavigate();
   const { setPendingEmail, setPendingUserData, pendingRole } = useAuth();
+  const { routes } = useRouteContext();
   const { toast } = useToast();
 
   const [fullName, setFullName] = useState("");
@@ -110,9 +106,9 @@ const DriverSignup = () => {
                 onChange={(e) => setRouteNo(e.target.value)}
                 className="w-full px-5 py-4 bg-muted rounded-full text-foreground border border-transparent focus:border-primary/30 focus:outline-none transition-colors appearance-none cursor-pointer"
               >
-                <option value="" disabled>Route No.</option>
+                <option value="" disabled>Select Bus Route</option>
                 {routes.map((route) => (
-                  <option key={route.value} value={route.value}>{route.label}</option>
+                  <option key={route.busNumber} value={route.busNumber}>{route.busName}</option>
                 ))}
               </select>
               {errors.routeNo && <p className="text-sm text-destructive mt-1 ml-4">{errors.routeNo}</p>}

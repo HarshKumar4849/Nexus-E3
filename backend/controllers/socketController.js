@@ -29,12 +29,14 @@ function socketHandler(io) {
       if (!bus || bus.broadcaster !== socket.id) return;
 
       bus.lastPing = Date.now();
-      io.to(busId).emit("bus-location", { lat, lng });
+      // Sync event map payload shape matched with frontend listener
+      io.to(busId).emit("driver-location-update", { routeId: busId, lat, lng });
 
       const route = ROUTES.find(r => r.busNumber === busId);
       if (!route) return;
 
-      const stopETAs = await calculateRouteETA(
+      // Fixed critical syntax error referencing non-existent calculation function
+      const stopETAs = await calculateStopWiseETA(
         { lat, lng },
         route
       );
@@ -60,16 +62,23 @@ function socketHandler(io) {
         busState[busId].lastPing = Date.now();
       }
       
-      // Broadcast the new location to all users watching this bus
-      io.to(busId).emit("bus-location", { lat, lng });
+      // Broadcast the new location to all users watching this bus using proper shape mapping
+      io.to(busId).emit("driver-location-update", { routeId: busId, lat, lng });
       
-      // Calculate and broadcast ETAs
-      const stopETAs = await calculateRouteETA(
+      // Calculate and broadcast ETAs utilizing correct imported func reference
+      const stopETAs = await calculateStopWiseETA(
         { lat, lng },
         route
       );
       
       io.to(busId).emit("bus-stop-eta", stopETAs);
+    });
+
+    socket.on("driver-offline", ({ busId }) => {
+      io.to(busId).emit("bus-offline", { routeId: busId });
+      if (busState[busId]) {
+        delete busState[busId];
+      }
     });
 
     socket.on("disconnect", () => {
