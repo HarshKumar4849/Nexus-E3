@@ -34,7 +34,7 @@ const OTPVerification = () => {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    if (value && index < 3) {
+    if (value && index < otp.length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -124,18 +124,19 @@ const OTPVerification = () => {
                   We have sent the verification code<br />to your Email address
                 </p>
 
-                <div className="flex justify-center gap-4 mb-8">
-                  {otp.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={(el) => (inputRefs.current[index] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleChange(index, e.target.value)}
-                      onKeyDown={(e) => handleKeyDown(index, e)}
-                      className="w-16 h-16 text-center text-2xl font-semibold bg-background border-2 border-muted rounded-2xl focus:border-primary focus:outline-none transition-colors"
+<div className="flex flex-wrap justify-center gap-3 mb-8">
+                {otp.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    className="w-14 h-14 text-center text-2xl font-semibold bg-background border-2 border-muted rounded-3xl focus:border-primary focus:outline-none transition-colors"
                     />
                   ))}
                 </div>

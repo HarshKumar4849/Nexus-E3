@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bus, ChevronLeft, ChevronRight, Clock, MapPin, Navigation } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
+import AuthCard from "@/components/AuthCard";
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/BackButton";
 import { useRouteContext } from "@/contexts/RouteContext";
@@ -31,13 +32,13 @@ const RouteSelection = () => {
 
   return (
     <MobileLayout>
-      <div className="w-full max-w-[1024px] mx-auto">
-        <div className="bg-background/95 border border-border rounded-[2rem] shadow-[0_30px_70px_-40px_rgba(15,23,42,0.35)] p-8">
+      <AuthCard>
+        <div className="flex flex-col min-h-[calc(100vh-5rem)]">
           <div className="flex items-center justify-between mb-6">
             <BackButton />
           </div>
 
-          <div className="flex-1 pt-2">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-foreground text-center mb-4">
               Campus Commute
             </h1>
@@ -56,7 +57,7 @@ const RouteSelection = () => {
 
               <div
                 id="routes-container"
-                className="flex gap-5 overflow-x-auto pb-4 flex-1 scroll-smooth hide-scrollbar"
+                className="flex gap-5 overflow-x-auto pb-4 flex-1 scroll-smooth hide-scrollbar px-2"
                 style={{ scrollBehavior: "smooth", scrollbarWidth: "none" }}
               >
                 {routes.map((route) => (
@@ -175,7 +176,7 @@ const RouteSelection = () => {
             </div>
           </div>
         </div>
-      </div>
+      </AuthCard>
     </MobileLayout>
   );
 };
