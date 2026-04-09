@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { io } from 'socket.io-client';
 import 'leaflet-routing-machine';
 import { useRouteContext } from '../contexts/RouteContext';
+import { useToast } from "@/hooks/use-toast";
 
 // Helper to auto-recenter the map on the live position or start position
 const RecenterMap = ({ lat, lng }: { lat: number; lng: number }) => {
