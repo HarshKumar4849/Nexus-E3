@@ -6,12 +6,14 @@ import FormInput from "@/components/FormInput";
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/BackButton";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
 
 const ChangePassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, updateUser } = useAuth();
   
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -23,8 +25,15 @@ const ChangePassword = () => {
   const validateForm = () => {
     const newErrors: { currentPassword?: string; newPassword?: string; confirmPassword?: string } = {};
 
-    // Simulate wrong current password check
-    if (currentPassword !== "password123") {
+    const registeredAccounts = JSON.parse(
+      localStorage.getItem("campus-commute-accounts") || "[]"
+    );
+    const targetAccount = registeredAccounts.find(
+      (acc: any) => acc.email === user?.email
+    );
+
+    // Validate real current password
+    if (targetAccount && currentPassword !== targetAccount.password) {
       newErrors.currentPassword = "Current password is incorrect";
       setAttempts(prev => prev + 1);
       if (attempts >= 0) {
@@ -50,6 +59,9 @@ const ChangePassword = () => {
 
   const handleSubmit = () => {
     if (!validateForm()) return;
+
+    // Securely update actual password in shared persistence local store
+    updateUser({ password: newPassword });
 
     toast({
       title: "Password Changed",

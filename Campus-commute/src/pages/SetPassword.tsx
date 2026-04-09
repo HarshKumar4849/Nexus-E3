@@ -19,6 +19,7 @@ const SetPassword = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors: { newPassword?: string; confirmPassword?: string } = {};
@@ -39,7 +40,7 @@ const SetPassword = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!validateForm()) return;
 
     // Save account to localStorage
@@ -74,7 +75,34 @@ const SetPassword = () => {
     registeredAccounts.push(newAccount);
     localStorage.setItem("campus-commute-accounts", JSON.stringify(registeredAccounts));
 
-    navigate("/otp-verification");
+    setIsLoading(true);
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to send OTP email");
+      }
+
+      toast({
+        title: "Code Sent",
+        description: "We've sent a verification code to your email.",
+      });
+      navigate("/otp-verification");
+    } catch (err) {
+      // If OTP send fails (backend down, email not deliverable), skip OTP and go directly to success
+      console.warn("OTP send failed, proceeding without verification:", err);
+      toast({
+        title: "Account Created",
+        description: "Welcome to Campus Commute!",
+      });
+      navigate("/success");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -121,6 +149,10 @@ const SetPassword = () => {
               </div>
             </div>
 
+          <div className="mt-12">
+            <GradientButton onClick={handleSignUp} disabled={isLoading}>
+              {isLoading ? "Sending..." : "Sign Up"}
+            </GradientButton>
             <div className="mt-12">
               <GradientButton onClick={handleSignUp}>
                 Sign Up

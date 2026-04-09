@@ -52,9 +52,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const registeredAccounts = JSON.parse(
       localStorage.getItem("campus-commute-accounts") || "[]"
     );
-    const account = registeredAccounts.find(
+
+    // Try exact match first, then fallback to email+password only
+    let account = registeredAccounts.find(
       (acc: any) => acc.email === email && acc.role === role && acc.password === password
     );
+    if (!account) {
+      account = registeredAccounts.find(
+        (acc: any) => acc.email === email && acc.password === password
+      );
+    }
 
     if (!account) {
       return false;

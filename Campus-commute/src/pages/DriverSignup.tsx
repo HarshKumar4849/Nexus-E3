@@ -6,6 +6,7 @@ import AuthCard from "@/components/AuthCard";
 import FormInput from "@/components/FormInput";
 import GradientButton from "@/components/GradientButton";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteContext } from "@/contexts/RouteContext";
 import { useToast } from "@/hooks/use-toast";
 
 const nameSchema = z.string()
@@ -13,12 +14,6 @@ const nameSchema = z.string()
   .regex(/^[a-zA-Z\s]+$/, "Name can only contain letters");
 
 const emailSchema = z.string().email("Invalid email address");
-
-const routes = [
-  { value: "1", label: "Route no.1 - Kottur to Campus" },
-  { value: "2", label: "Route no.2 - Anna Nagar to Campus" },
-  { value: "3", label: "Route no.3 - T Nagar to Campus" },
-];
 
 const timings = [
   { value: "06:00 AM", label: "06:00 AM" },
@@ -29,6 +24,7 @@ const timings = [
 const DriverSignup = () => {
   const navigate = useNavigate();
   const { setPendingEmail, setPendingUserData, pendingRole } = useAuth();
+  const { routes } = useRouteContext();
   const { toast } = useToast();
 
   const [fullName, setFullName] = useState("");
@@ -88,6 +84,35 @@ const DriverSignup = () => {
 
   return (
     <MobileLayout>
+      <div className="flex flex-col min-h-screen px-8 py-12">
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold text-foreground text-center mt-8 mb-2">
+            Driver Sign Up
+          </h1>
+          <p className="text-muted-foreground text-center mb-10">
+            Please provide the details below<br />to create your account
+          </p>
+
+          <div className="space-y-4 mb-6">
+            <FormInput
+              placeholder="Full Name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value.replace(/[^a-zA-Z\s]/g, ""))}
+              error={errors.fullName}
+            />
+            
+            <div>
+              <select
+                value={routeNo}
+                onChange={(e) => setRouteNo(e.target.value)}
+                className="w-full px-5 py-4 bg-muted rounded-full text-foreground border border-transparent focus:border-primary/30 focus:outline-none transition-colors appearance-none cursor-pointer"
+              >
+                <option value="" disabled>Select Bus Route</option>
+                {routes.map((route) => (
+                  <option key={route.busNumber} value={route.busNumber}>{route.busName}</option>
+                ))}
+              </select>
+              {errors.routeNo && <p className="text-sm text-destructive mt-1 ml-4">{errors.routeNo}</p>}
       <AuthCard>
         <div className="flex flex-col min-h-[calc(100vh-5rem)]">
           <div className="flex-1">

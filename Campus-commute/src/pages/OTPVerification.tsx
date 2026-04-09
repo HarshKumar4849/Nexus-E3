@@ -45,7 +45,7 @@ const OTPVerification = () => {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullOtp = otp.join("");
     if (fullOtp.length !== 4) {
       toast({
@@ -56,11 +56,30 @@ const OTPVerification = () => {
       return;
     }
 
-    // Simulate OTP verification
-    navigate("/success");
+    try {
+      const response = await fetch("http://localhost:8000/user/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, otp: fullOtp }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Verification failed");
+      }
+
+      toast({ title: "Success", description: "Email Verified successfully!" });
+      navigate("/success");
+    } catch (err: any) {
+      toast({
+        title: "Verification Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (resendCount <= 0) {
       toast({
         title: "Max attempts reached",
@@ -70,21 +89,33 @@ const OTPVerification = () => {
       return;
     }
 
-    setResendCount(resendCount - 1);
-    setOtp(["", "", "", ""]);
-    inputRefs.current[0]?.focus();
-    
-    toast({
-      title: "OTP Resent",
-      description: "A new verification code has been sent to your email",
-    });
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+
+      if (!response.ok) throw new Error();
+
+      setResendCount(resendCount - 1);
+      setOtp(["", "", "", ""]);
+      inputRefs.current[0]?.focus();
+      
+      toast({
+        title: "OTP Resent",
+        description: "A new verification code has been sent to your email",
+      });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to resend OTP", variant: "destructive" });
+    }
   };
 
   const handleChangeEmail = () => {
     setShowChangeEmail(true);
   };
 
-  const handleUpdateEmail = () => {
+  const handleUpdateEmail = async () => {
     if (!newEmail.trim()) {
       toast({
         title: "Invalid email",
@@ -94,16 +125,28 @@ const OTPVerification = () => {
       return;
     }
 
-    setPendingEmail(newEmail);
-    setNewEmail("");
-    setShowChangeEmail(false);
-    setOtp(["", "", "", ""]);
-    inputRefs.current[0]?.focus();
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail }),
+      });
 
-    toast({
-      title: "Email Updated",
-      description: `Verification code sent to ${newEmail}`,
-    });
+      if (!response.ok) throw new Error();
+
+      setPendingEmail(newEmail);
+      setNewEmail("");
+      setShowChangeEmail(false);
+      setOtp(["", "", "", ""]);
+      inputRefs.current[0]?.focus();
+
+      toast({
+        title: "Email Updated",
+        description: `Verification code sent to ${newEmail}`,
+      });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to send code to new email", variant: "destructive" });
+    }
   };
 
   return (
@@ -136,6 +179,60 @@ const OTPVerification = () => {
                     value={digit}
                     onChange={(e) => handleChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
+                    className="w-16 h-16 text-center text-2xl font-semibold bg-background border-2 border-muted rounded-2xl focus:border-primary focus:outline-none transition-colors"
+                  />
+                ))}
+              </div>
+
+              <GradientButton onClick={handleVerify}>
+                Verify
+              </GradientButton>
+
+              <p className="text-center text-muted-foreground mt-6">
+                Didn't receive code?{" "}
+                <button 
+                  onClick={handleResend}
+                  className="text-foreground font-medium hover:underline"
+                  disabled={resendCount <= 0}
+                >
+                  Resend({resendCount} left)
+                </button>
+              </p>
+
+              <button
+                onClick={() => {
+                  toast({
+                    title: "Verification Skipped",
+                    description: "You can verify your email later from settings.",
+                  });
+                  navigate("/success");
+                }}
+                className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 rounded-full transition-colors"
+              >
+                Skip Verification →
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-foreground text-center mb-4">
+                Change Email Address
+              </h1>
+              <p className="text-muted-foreground text-center mb-8">
+                Enter your new email address
+              </p>
+
+              <div className="mb-6">
+                <FormInput
+                  placeholder="Enter new email address"
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <GradientButton onClick={handleUpdateEmail}>
+                  Update Email
                     className="w-14 h-14 text-center text-2xl font-semibold bg-background border-2 border-muted rounded-3xl focus:border-primary focus:outline-none transition-colors"
                     />
                   ))}
