@@ -26,9 +26,22 @@ const RouteSelection = () => {
     }
   };
 
-  const activeDriver = selectedRoute.drivers && selectedRoute.drivers.length > 0 
+  const activeDriver = selectedRoute?.drivers && selectedRoute.drivers.length > 0 
     ? selectedRoute.drivers[0] 
     : null;
+
+  if (!selectedRoute) {
+    return (
+      <MobileLayout>
+        <AuthCard>
+          <div className="flex flex-col items-center justify-center min-h-[calc(100vh-5rem)]">
+            <Bus className="w-12 h-12 text-primary opacity-50 mb-4 animate-pulse" />
+            <p className="text-muted-foreground font-medium">Loading routes...</p>
+          </div>
+        </AuthCard>
+      </MobileLayout>
+    );
+  }
 
   return (
     <MobileLayout>

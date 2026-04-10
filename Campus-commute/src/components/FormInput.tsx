@@ -33,7 +33,7 @@ const FormInput = ({
         <input
           type={inputType}
           className={cn(
-            "w-full px-5 py-4 bg-muted rounded-full text-foreground placeholder:text-muted-foreground border border-transparent focus:border-primary/30 focus:outline-none transition-colors",
+            "w-full px-5 py-4 bg-muted rounded-xl md:rounded-full text-foreground placeholder:text-muted-foreground border border-transparent focus:border-primary/30 focus:outline-none transition-colors",
             showLockIcon && "pl-12",
             showPasswordToggle && "pr-12",
             error && "border-destructive",

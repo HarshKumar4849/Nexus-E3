@@ -16,10 +16,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 interface DeleteAccountModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
 }
 
-const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => {
+const DeleteAccountModal = ({ open, onOpenChange, onClose }: DeleteAccountModalProps) => {
+  const handleOpenChange = (isOpen: boolean) => {
+    if (onOpenChange) onOpenChange(isOpen);
+    if (!isOpen && onClose) onClose();
+  };
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const { toast } = useToast();
@@ -104,14 +109,14 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
       });
     } finally {
       setIsDeleting(false);
-      onOpenChange(false);
+      handleOpenChange(false);
       setPassword("");
       setConfirmDelete(false);
     }
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent className="max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-destructive">

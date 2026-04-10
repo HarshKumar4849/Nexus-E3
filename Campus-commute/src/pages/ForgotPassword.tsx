@@ -19,10 +19,22 @@ const ForgotPassword = () => {
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [resendCount, setResendCount] = useState(3);
 
-  const handleSendOTP = () => {
+  const handleSendOTP = async () => {
     try {
       emailSchema.parse(email);
       setError("");
+      
+      // Actually call backend to send OTP
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to send OTP");
+      }
+      
       setStep("otp");
       toast({
         title: "OTP Sent",
@@ -31,11 +43,17 @@ const ForgotPassword = () => {
     } catch (err) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0]?.message || "Invalid email");
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to send verification code. Please try again.",
+          variant: "destructive",
+        });
       }
     }
   };
 
-  const handleVerifyOTP = () => {
+  const handleVerifyOTP = async () => {
     const fullOtp = otp.join("");
     if (fullOtp.length !== 4) {
       toast({
@@ -45,17 +63,54 @@ const ForgotPassword = () => {
       });
       return;
     }
-    navigate("/reset-password");
+    
+    try {
+      const response = await fetch("http://localhost:8000/user/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: fullOtp }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Verification failed");
+      }
+      
+      navigate("/reset-password");
+    } catch (err: any) {
+      toast({
+        title: "Verification Failed",
+        description: err.message || "Incorrect OTP. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (resendCount <= 0) return;
-    setResendCount(resendCount - 1);
-    setOtp(["", "", "", ""]);
-    toast({
-      title: "OTP Resent",
-      description: "A new verification code has been sent",
-    });
+    
+    try {
+      const response = await fetch("http://localhost:8000/user/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      
+      if (!response.ok) throw new Error();
+      
+      setResendCount(resendCount - 1);
+      setOtp(["", "", "", ""]);
+      toast({
+        title: "OTP Resent",
+        description: "A new verification code has been sent",
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to resend code",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleOtpChange = (index: number, value: string) => {

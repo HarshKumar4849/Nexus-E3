@@ -15,10 +15,10 @@ const GradientButton = ({
   disabled,
   ...props
 }: GradientButtonProps) => {
-  const baseClasses = "py-4 px-8 rounded-full font-medium text-lg transition-all duration-300 shadow-lg";
-  
+  const baseClasses = "py-4 px-8 rounded-xl md:rounded-full font-medium text-lg transition-all duration-300 shadow-lg";
+
   const variantClasses = {
-    primary: disabled 
+    primary: disabled
       ? "bg-muted-foreground/50 text-primary-foreground cursor-not-allowed"
       : "text-primary-foreground [background:var(--gradient-primary)] hover:opacity-90 active:scale-[0.98]",
     outline: "border-2 border-foreground bg-transparent text-foreground hover:bg-foreground/5",

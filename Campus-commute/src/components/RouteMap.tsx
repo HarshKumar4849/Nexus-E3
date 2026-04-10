@@ -1,9 +1,8 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { io } from 'socket.io-client';
 import 'leaflet-routing-machine';
 import { useRouteContext } from '../contexts/RouteContext';
 import { useToast } from "@/hooks/use-toast";
@@ -53,7 +52,7 @@ const RoutingControl = ({ stops, setIsRouteBusy }: { stops: any[], setIsRouteBus
       draggableWaypoints: false,
       showAlternatives: true,
       fitSelectedRoutes: true,
-      show: false, // Hide default ugly itinerary
+      show: false,
       lineOptions: {
         styles: [{ color: '#0ea5e9', opacity: 1, weight: 6 }]
       },
@@ -80,8 +79,20 @@ const RoutingControl = ({ stops, setIsRouteBusy }: { stops: any[], setIsRouteBus
   return null;
 };
 
+// Recenter on live bus position when it changes
+const LiveRecenter = ({ position }: { position: [number, number] | null }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView(position, map.getZoom(), { animate: true, duration: 1.5 });
+    }
+  }, [position, map]);
+  return null;
+};
+
 const RouteMap: React.FC<any> = () => {
-  const { selectedRoute, liveBusPosition, setLiveBusPosition } = useRouteContext();
+  // FIX #3: Use liveBusPosition from shared context — NO local socket
+  const { selectedRoute, liveBusPosition } = useRouteContext();
   const { toast } = useToast();
   
   const [visitedStops, setVisitedStops] = useState<Set<string>>(new Set());
@@ -96,36 +107,7 @@ const RouteMap: React.FC<any> = () => {
     setVisitedStops(new Set());
   }, [selectedRoute]);
 
-  // 2. Websocket Bus Driver Connection
-  useEffect(() => {
-    const socketURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    const socket = io(socketURL);
-
-    // Subscrube to the native tracking room on Backend
-    if (selectedRoute && selectedRoute.busNumber) {
-      socket.emit("join-bus", { busId: selectedRoute.busNumber });
-    }
-
-    // Dynamic marker update
-    socket.on('driver-location-update', (data: { routeId: string, lat: number, lng: number }) => {
-      if (data.routeId === selectedRoute.busNumber) {
-         setLiveBusPosition([data.lat, data.lng]);
-      }
-    });
-
-    // Handle dropping the bus visibility when driver initiates shutdown
-    socket.on('bus-offline', (data: { routeId: string }) => {
-      if (data.routeId === selectedRoute.busNumber) {
-         setLiveBusPosition([undefined as any, undefined as any]);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [selectedRoute, setLiveBusPosition]);
-
-  // 3. Proximity Geofencing Toasting
+  // Client-side proximity toasts as backup for real-time geofencing
   useEffect(() => {
     if (!liveBusPosition) return;
 
@@ -138,11 +120,10 @@ const RouteMap: React.FC<any> = () => {
         const stopLatLng = L.latLng(stop.coordinates.lat, stop.coordinates.lng);
         const distanceMeters = busLatLng.distanceTo(stopLatLng);
 
-        // If Bus falls natively under 500 meters of an unvisited node
         if (distanceMeters < 500) {
           toast({
-            title: "Upcoming Stop Warning",
-            description: `${stop.name} - Arriving Shortly!`,
+            title: "📍 Approaching Stop",
+            description: `${stop.name} — Arriving shortly!`,
           });
           
           setVisitedStops(prev => {
@@ -151,7 +132,6 @@ const RouteMap: React.FC<any> = () => {
             return newSet;
           });
           
-          // Break to prevent rapid firing overlapping toasts for tight clusters
           break;
         }
       }
@@ -185,14 +165,13 @@ const RouteMap: React.FC<any> = () => {
         )}
       </div>
 
-      {/* Dynamic CSS Injection to smoothly slide the Leaflet wrapper div 
-          preventing rigid socket frame-jumping natively */}
+      {/* Dynamic CSS for smooth marker animation */}
       <style>{`
         .live-bus-marker {
           transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
         }
         .leaflet-routing-alt {
-            display: none !important; /* Force hide the text itinerary panel if it pops up */
+            display: none !important;
         }
       `}</style>
 
@@ -202,33 +181,25 @@ const RouteMap: React.FC<any> = () => {
         zoomControl={false}
         className="w-full h-full min-h-screen z-0"
       >
-        {/* Base Layer - Vibrant OpenStreetMap Standard */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 
-          Placeholder Traffic TileLayer - Mapbox/TomTom
-          Uncomment and hook KEY later for real-time red/yellow traffic densities 
-        */}
-        {/* <TileLayer 
-          url="https://api.mapbox.com/styles/v1/mapbox/navigation-guidance-day-v4/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_KEY" 
-          opacity={0.5} 
-          zIndex={10} 
-        /> */}
-
         <RecenterMap lat={startPoint[0]} lng={startPoint[1]} />
 
-        {/* Native Road Snapped Routing Machine */}
+        {/* Recenter on live bus when tracking */}
+        {liveBusPosition && <LiveRecenter position={liveBusPosition} />}
+
+        {/* Road Snapped Routing Machine */}
         <RoutingControl stops={selectedRoute.stoppages} setIsRouteBusy={setIsRouteBusy} />
 
-        {/* Nodes */}
+        {/* Start / End Nodes */}
         {startPoint && <Marker position={startPoint} icon={StartIcon} />}
         {endPoint && <Marker position={endPoint} icon={EndIcon} />}
         
-        {/* Live Animating Marker */}
-        {liveBusPosition && liveBusPosition[0] !== undefined && (
+        {/* Live Bus Marker — only shown when driver is broadcasting */}
+        {liveBusPosition && (
            <Marker position={liveBusPosition} icon={BusIcon}></Marker>
         )}
 

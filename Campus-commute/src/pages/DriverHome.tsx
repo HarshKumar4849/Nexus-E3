@@ -80,54 +80,75 @@ const DriverHome = () => {
   const { routes } = useRouteContext();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dutyStatus, setDutyStatus] = useState(true);
-  const [locationSharing, setLocationSharing] = useState(true);
+  // FIX #1: Start with location sharing OFF — driver must click "Start"
+  const [locationSharing, setLocationSharing] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [socketReady, setSocketReady] = useState(false);
+  const [broadcastCount, setBroadcastCount] = useState(0);
   
-  // Initialize socket connection
+  // Initialize socket connection + join bus room
   useEffect(() => {
-    const newSocket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:8000");
+    const newSocket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:8000", {
+      transports: ["websocket", "polling"],
+    });
+
+    newSocket.on("connect", () => {
+      console.log("[Driver] Socket connected:", newSocket.id);
+      // FIX #1: Join room on connect, before any location is sent
+      if (user?.routeNo) {
+        newSocket.emit("join-bus", { busId: String(user.routeNo) });
+      }
+      setSocketReady(true);
+    });
+
+    newSocket.on("disconnect", () => {
+      console.log("[Driver] Socket disconnected");
+      setSocketReady(false);
+    });
+
     setSocket(newSocket);
     
-    // Cleanup
     return () => {
       newSocket.disconnect();
     };
-  }, []);
-  
-  // Join bus room when user route changes
-  useEffect(() => {
-    if (socket && user?.routeNo) {
-      const busId = String(user.routeNo);
-      socket.emit("join-bus", { busId });
-    }
-  }, [socket, user?.routeNo]);
+  }, [user?.routeNo]);
 
+  // GPS watching — only when locationSharing is ON and socket is ready
   useEffect(() => {
-    if (navigator.geolocation && locationSharing && dutyStatus) {
-      const id = navigator.geolocation.watchPosition(
-        (pos) => {
-          const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setCoords(newCoords);
-          
-          // Send location to backend if socket is connected and user is on duty
-          if (socket && user?.routeNo) {
-            socket.emit("driver-send-location", {
-              busId: user.routeNo,
-              lat: newCoords.lat,
-              lng: newCoords.lng
-            });
-          }
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-      
-      return () => navigator.geolocation.clearWatch(id);
+    if (!navigator.geolocation || !locationSharing || !dutyStatus || !socketReady || !socket) {
+      return;
     }
-  }, [socket, locationSharing, dutyStatus, user?.routeNo]);
+
+    console.log("[Driver] Starting GPS watch...");
+
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCoords(newCoords);
+        
+        // Send location to backend
+        if (user?.routeNo) {
+          socket.emit("driver-send-location", {
+            busId: String(user.routeNo),
+            lat: newCoords.lat,
+            lng: newCoords.lng
+          });
+          setBroadcastCount(c => c + 1);
+        }
+      },
+      (error) => {
+        console.error('[Driver] Geolocation error:', error);
+      },
+      // FIX #8: maximumAge 5s instead of 60s for fresh GPS
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+    
+    return () => {
+      console.log("[Driver] Stopping GPS watch");
+      navigator.geolocation.clearWatch(id);
+    };
+  }, [socket, socketReady, locationSharing, dutyStatus, user?.routeNo]);
 
   return (
     <MobileLayout>
@@ -212,25 +233,37 @@ const DriverHome = () => {
       })()}
     </div>
 
-    {/* Location Sharing Button */}
+    {/* Location Sharing Button + Status */}
     <div
       className="fixed bottom-0 left-0 right-0 z-[1001]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="flex justify-center p-4">
+      <div className="flex flex-col items-center gap-2 p-4 bg-background/80 backdrop-blur-sm">
+        {/* Connection status */}
+        <div className="flex items-center gap-2 text-xs">
+          <div className={`w-2 h-2 rounded-full ${socketReady ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="text-muted-foreground">
+            {socketReady ? 'Connected' : 'Disconnected'}
+          </span>
+          {locationSharing && broadcastCount > 0 && (
+            <span className="text-muted-foreground ml-2">• {broadcastCount} updates sent</span>
+          )}
+        </div>
+
         <button
           onClick={() => {
             const willShare = !locationSharing;
             setLocationSharing(willShare);
             if (!willShare && socket && user?.routeNo) {
-              socket.emit("driver-offline", { busId: user.routeNo });
+              socket.emit("driver-offline", { busId: String(user.routeNo) });
+              setBroadcastCount(0);
             }
           }}
           className={`${
-            locationSharing ? "bg-red-500" : "bg-green-500"
-          } text-white py-3 px-8 rounded-lg font-medium shadow-lg min-w-[200px]`}
+            locationSharing ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"
+          } text-white py-3 px-8 rounded-lg font-medium shadow-lg min-w-[200px] transition-colors`}
         >
-          {locationSharing ? "Stop" : "Start"}
+          {locationSharing ? "Stop Sharing" : "Start Sharing"}
         </button>
       </div>
     </div>

@@ -13,7 +13,7 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
 
 const SetPassword = () => {
   const navigate = useNavigate();
-  const { pendingUserData, pendingEmail, pendingRole } = useAuth();
+  const { pendingUserData, pendingEmail, pendingRole, setPendingUserData } = useAuth();
   const { toast } = useToast();
 
   const [newPassword, setNewPassword] = useState("");
@@ -42,6 +42,9 @@ const SetPassword = () => {
 
   const handleSignUp = async () => {
     if (!validateForm()) return;
+
+    // Save password into pending user data so completeSignup can use it
+    setPendingUserData({ ...pendingUserData, password: newPassword });
 
     // Save account to localStorage
     const registeredAccounts = JSON.parse(

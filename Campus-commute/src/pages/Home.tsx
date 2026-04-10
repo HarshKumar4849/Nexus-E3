@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Menu, Bell, MapPin, ChevronUp, ChevronDown, Bus, Clock, Navigation, ChevronLeft, ChevronRight } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import GradientButton from "@/components/GradientButton";
@@ -10,14 +10,19 @@ import { useRouteContext } from "@/contexts/RouteContext";
 
 const Home = () => {
   const { user } = useAuth();
-  const { routes, selectedRoute, setSelectedRoute, liveBusPosition } = useRouteContext();
+  const { routes, selectedRoute, setSelectedRoute, liveBusPosition, stopETAs, notifications, clearNotifications } = useRouteContext();
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(true);
   
-  // Calculate dynamic ETA using first unvisited stop (placeholder 10m fallback)
-  const eta = 10; 
+  // Fix #5: Real ETA from backend stop-wise calculation
+  const eta = useMemo(() => {
+    if (stopETAs.length > 0) {
+      return stopETAs[0].minutes; // nearest stop ETA
+    }
+    return null; // no data yet
+  }, [stopETAs]); 
 
   if (!selectedRoute) {
     return (
@@ -181,12 +186,16 @@ const Home = () => {
               className="p-3 bg-background/80 backdrop-blur rounded-full shadow-sm relative pointer-events-auto hover:bg-background transition-colors"
             >
               <Bell className="w-5 h-5 text-foreground" />
-              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-destructive border-2 border-background rounded-full" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-background">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
             </button>
           </div>
 
           {/* ETA Pill constraint absolute tracking over map */}
-          {liveBusPosition && (
+          {liveBusPosition && eta !== null && (
             <div className="absolute top-40 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
               <div className="bg-primary/95 backdrop-blur text-primary-foreground px-5 py-2.5 rounded-full text-sm shadow-xl flex items-center gap-2 border border-primary-foreground/20">
                 <Clock className="w-4 h-4" />
@@ -240,7 +249,7 @@ const Home = () => {
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">ETA</p>
                       <p className="text-sm font-bold text-primary flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        {eta} min
+                        {eta !== null ? `${eta} min` : "—"}
                       </p>
                     </div>
                    </div>
@@ -277,7 +286,12 @@ const Home = () => {
         
         {/* Global Floating Handlers */}
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <NotificationSheet open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+        <NotificationSheet
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          notifications={notifications}
+          onClear={clearNotifications}
+        />
         
       </div>
     </MobileLayout>
