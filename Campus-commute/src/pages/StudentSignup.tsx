@@ -20,6 +20,7 @@ const yearSchema = z.string()
   }, "Please enter a valid batch year");
 
 const emailSchema = z.string().email("Invalid email address");
+const regdNoSchema = z.string().min(3, "Registration number is required");
 
 const StudentSignup = () => {
   const navigate = useNavigate();
@@ -28,12 +29,13 @@ const StudentSignup = () => {
 
   const [fullName, setFullName] = useState("");
   const [yearBatch, setYearBatch] = useState("");
+  const [registrationNo, setRegistrationNo] = useState("");
   const [email, setEmail] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [errors, setErrors] = useState<{ fullName?: string; yearBatch?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ fullName?: string; yearBatch?: string; email?: string; registrationNo?: string }>({});
 
   const validateForm = () => {
-    const newErrors: { fullName?: string; yearBatch?: string; email?: string } = {};
+    const newErrors: { fullName?: string; yearBatch?: string; email?: string; registrationNo?: string } = {};
 
     try {
       nameSchema.parse(fullName);
@@ -59,6 +61,14 @@ const StudentSignup = () => {
       }
     }
 
+    try {
+      regdNoSchema.parse(registrationNo);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        newErrors.registrationNo = err.errors[0]?.message;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -76,7 +86,7 @@ const StudentSignup = () => {
     }
 
     setPendingEmail(email);
-    setPendingUserData({ fullName, yearBatch, role: pendingRole });
+    setPendingUserData({ fullName, yearBatch, registrationNo, role: pendingRole });
     navigate("/set-password");
   };
 
@@ -111,6 +121,12 @@ const StudentSignup = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 error={errors.email}
+              />
+              <FormInput
+                placeholder="Registration Number"
+                value={registrationNo}
+                onChange={(e) => setRegistrationNo(e.target.value)}
+                error={errors.registrationNo}
               />
             </div>
 

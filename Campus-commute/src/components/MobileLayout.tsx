@@ -7,8 +7,8 @@ interface MobileLayoutProps {
 
 const MobileLayout = ({ children, className = "" }: MobileLayoutProps) => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/50">
-      <div className={`w-full max-w-[430px] md:max-w-none md:w-full min-h-screen bg-background relative overflow-hidden ${className}`}>
+    <div className="min-h-screen bg-background md:flex md:items-center md:justify-center md:bg-muted/50">
+      <div className={`w-full min-h-screen md:max-w-none md:w-full bg-background relative overflow-hidden ${className}`}>
         {children}
       </div>
     </div>
@@ -16,3 +16,4 @@ const MobileLayout = ({ children, className = "" }: MobileLayoutProps) => {
 };
 
 export default MobileLayout;
+

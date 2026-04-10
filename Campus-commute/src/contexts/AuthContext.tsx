@@ -68,6 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await fetch("http://localhost:8000/user/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password })
       });
       if (!response.ok) return false;
@@ -92,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await fetch("http://localhost:8000/user/google-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ accessToken, role })
       });
       if (!response.ok) return false;
@@ -114,7 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      await fetch("http://localhost:8000/user/logout", { method: "POST" });
+      await fetch("http://localhost:8000/user/logout", { method: "POST", credentials: "include" });
     } catch {}
     setIsAuthenticated(false);
     setUser(null);
@@ -139,6 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const res = await fetch("http://localhost:8000/user/register", {
          method: "POST",
          headers: { "Content-Type": "application/json" },
+         credentials: "include",
          body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error("Backend registration failed");
