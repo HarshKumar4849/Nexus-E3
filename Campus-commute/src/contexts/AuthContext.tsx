@@ -71,7 +71,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         credentials: "include",
         body: JSON.stringify({ email, password })
       });
-      if (!response.ok) return false;
+      if (!response.ok) {
+        if (response.status >= 500) throw new Error("Server error - please try again later.");
+        return false;
+      }
       
       const { user: serverUser } = await response.json();
       setIsAuthenticated(true);
@@ -83,8 +86,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         selectedRoute: 1
       });
       return true;
-    } catch {
-      return false;
+    } catch (error: any) {
+      if (error.message.includes("Server error")) throw error;
+      throw new Error("Could not connect to the backend server.");
     }
   };
 
@@ -96,7 +100,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         credentials: "include",
         body: JSON.stringify({ accessToken, role })
       });
-      if (!response.ok) return false;
+      if (!response.ok) {
+        if (response.status >= 500) throw new Error("Server error - please try again later.");
+        return false;
+      }
       
       const { user: serverUser } = await response.json();
       setIsAuthenticated(true);
@@ -109,8 +116,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         selectedRoute: 1
       });
       return true;
-    } catch {
-      return false;
+    } catch (error: any) {
+      if (error.message.includes("Server error")) throw error;
+      throw new Error("Could not connect to the backend server.");
     }
   };
 
