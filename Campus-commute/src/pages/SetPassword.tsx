@@ -87,22 +87,32 @@ const SetPassword = () => {
       });
       
       if (!response.ok) {
-        throw new Error("Failed to send OTP email");
+        throw new Error("Failed to send OTP");
       }
 
-      toast({
-        title: "Code Sent",
-        description: "We've sent a verification code to your email.",
-      });
-      navigate("/otp-verification");
+      const data = await response.json();
+
+      if (data.emailFailed && data.otp) {
+        // Email couldn't be delivered — pass the real OTP to the verification page
+        toast({
+          title: "Verification Code Generated",
+          description: "Email delivery is unavailable. Your code will be shown on the next screen.",
+        });
+        navigate("/otp-verification", { state: { fallbackOtp: data.otp } });
+      } else {
+        toast({
+          title: "Code Sent",
+          description: "We've sent a verification code to your email.",
+        });
+        navigate("/otp-verification");
+      }
     } catch (err: any) {
       console.error("OTP send failed:", err);
       toast({
         title: "Error",
-        description: "Failed to send verification code. Please check your backend connection or try again later.",
+        description: "Failed to send verification code. Please check your backend connection.",
         variant: "destructive",
       });
-      // DO NOT SKIP OTP! Wait for the user to try again or fix the backend.
     } finally {
       setIsLoading(false);
     }

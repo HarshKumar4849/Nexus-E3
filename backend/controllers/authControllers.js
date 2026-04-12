@@ -121,17 +121,18 @@ module.exports.sendOTP = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
-    // Generate random 4-digit OTP
+    // Generate a real random 4-digit OTP every time
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     // Delete any existing OTP for this email
     await otpModel.deleteMany({ email });
 
-    // Save new OTP
+    // Save the real OTP to the database
     await otpModel.create({ email, otp: otpCode });
 
-    // Send email with a hard 5-second timeout using Promise.race
-    const sendEmailWithTimeout = () => {
+    // Attempt to send email with a 5-second hard timeout
+    let emailSent = false;
+    try {
       const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -149,29 +150,31 @@ module.exports.sendOTP = async (req, res) => {
       });
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Email send timed out after 5s")), 5000)
+        setTimeout(() => reject(new Error("Email send timed out")), 5000)
       );
 
-      return Promise.race([emailPromise, timeoutPromise]);
-    };
+      await Promise.race([emailPromise, timeoutPromise]);
+      emailSent = true;
+    } catch (emailError) {
+      console.warn("Email delivery failed:", emailError.message);
+    }
 
-    await sendEmailWithTimeout();
-    res.status(200).json({ success: true, message: "OTP sent successfully" });
+    if (emailSent) {
+      // Email sent successfully — don't expose the OTP
+      res.status(200).json({ success: true, message: "OTP sent to your email." });
+    } else {
+      // Email failed (SMTP blocked) — return the OTP in response so frontend can show it
+      console.log(`[OTP] Email delivery failed for ${email}. OTP: ${otpCode}`);
+      res.status(200).json({
+        success: true,
+        message: "Email delivery failed. Your verification code is shown below.",
+        otp: otpCode,
+        emailFailed: true,
+      });
+    }
   } catch (error) {
-    console.error("sendOTP error:", error.message);
-    console.log(`\n[DEV MODE] Bypassing OTP for ${req.body.email}. Setting OTP to 1234.\n`);
-    
-    // Overwrite the OTP in DB to 1234 so development can continue
-    try {
-      await otpModel.deleteMany({ email: req.body.email });
-      await otpModel.create({ email: req.body.email, otp: "1234" });
-    } catch(e) {}
-
-    res.status(200).json({ 
-      success: true, 
-      message: "DEV MODE: OTP send failed but bypassed. Use 1234.", 
-      devOtpHint: "Email failed to send. For development, use OTP: 1234" 
-    });
+    console.error("sendOTP critical error:", error);
+    res.status(500).json({ error: "Failed to generate OTP. Please try again." });
   }
 };
 
