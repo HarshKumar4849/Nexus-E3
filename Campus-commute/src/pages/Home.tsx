@@ -1,267 +1,284 @@
 import { useState, useEffect } from "react";
-import { Menu, Bell, MapPin, ChevronUp, ChevronDown, Bus, Clock, AlertCircle } from "lucide-react";
+import { Menu, Bell, MapPin, ChevronUp, ChevronDown, Bus, Clock, Navigation, ChevronLeft, ChevronRight } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import GradientButton from "@/components/GradientButton";
 import AppSidebar from "@/components/AppSidebar";
 import NotificationSheet from "@/components/NotificationSheet";
-import RouteDetailsModal from "@/components/RouteDetailsModal";
 import RouteMap from "@/components/RouteMap";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface Route {
-  id: string;
-  number: string;
-  stops: string[];
-  timing: string;
-  assignedBus?: string;
-  assignedDriver?: string;
-  conductorName?: string;
-  conductorPhone?: string;
-  eta?: number;
-}
-
-interface Stop {
-  name: string;
-  time: string;
-  status: "passed" | "current" | "upcoming";
-}
-
-const stops: Stop[] = [
-  { name: "Kottur", time: "06:00 AM", status: "passed" },
-  { name: "Guindy", time: "06:10 AM", status: "passed" },
-  { name: "Saidapet", time: "06:15 AM", status: "current" },
-  { name: "BSLR Mall", time: "06:20 AM", status: "upcoming" },
-];
+import { useRouteContext } from "@/contexts/RouteContext";
 
 const Home = () => {
   const { user } = useAuth();
+  const { routes, selectedRoute, setSelectedRoute, liveBusPosition } = useRouteContext();
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(true);
-  const [eta, setEta] = useState<number>(10);
-  const [routeInfo, setRouteInfo] = useState<Route | null>(null);
-  const [showRouteDetails, setShowRouteDetails] = useState(false);
+  
+  // Calculate dynamic ETA using first unvisited stop (placeholder 10m fallback)
+  const eta = 10; 
 
-  // Fetch ETA and route info from admin routes
-  useEffect(() => {
-    try {
-      const adminRoutes = JSON.parse(localStorage.getItem("adminRoutes") || "[]");
-      if (user?.routeNo) {
-        const route = adminRoutes.find((r: Route) => r.number === `Route ${user.routeNo}`);
-        if (route) {
-          setRouteInfo(route);
-          if (route.eta) {
-            setEta(route.eta);
-          }
-        }
+  if (!selectedRoute) {
+    return (
+      <MobileLayout>
+         <div className="flex items-center justify-center h-screen w-full bg-background">
+            <div className="animate-pulse flex flex-col items-center">
+               <Bus className="w-12 h-12 text-primary opacity-50 mb-4" />
+               <p className="text-muted-foreground font-medium">Booting Tracker Network...</p>
+            </div>
+         </div>
+      </MobileLayout>
+    );
+  }
+
+  const handleScroll = (direction: "left" | "right") => {
+    const container = document.getElementById("routes-container-desktop");
+    if (container) {
+      const scrollAmount = 150;
+      if (direction === "left") {
+        container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+      } else {
+        container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
       }
-    } catch (err) {
-      // Fallback to default ETA
-      setEta(10);
     }
-  }, [user?.routeNo]);
+  };
 
-  // Prepare map stops with coordinates for the background map
-  const mapStops = [
-    { name: "Kottur", lat: 13.0827, lng: 80.2707, status: "passed" as const, time: "06:00 AM" },
-    { name: "Guindy", lat: 13.0920, lng: 80.2707, status: "passed" as const, time: "06:10 AM" },
-    { name: "Saidapet", lat: 13.0636, lng: 80.2347, status: "current" as const, time: "06:15 AM" },
-    { name: "BSLR Mall", lat: 13.0346, lng: 80.2518, status: "upcoming" as const, time: "06:20 AM" },
-  ];
+  const activeDriver = selectedRoute?.drivers && selectedRoute.drivers.length > 0 
+    ? selectedRoute.drivers[0] 
+    : null;
 
   return (
     <MobileLayout>
-      <div className="relative h-screen overflow-hidden">
-        {/* Leaflet Map Background - Faded & Greyscale Effect */}
-        <div className="absolute inset-0 z-0 opacity-40" style={{ filter: 'grayscale(100%)' }}>
-          <RouteMap stops={mapStops} routeNumber="Route" />
+      {/* Root Layout Layer: Column on mobile, Row split on Desktop */}
+      <div className="relative h-screen overflow-hidden flex flex-col md:flex-row w-full bg-background">
+        
+        {/* =========================================
+            DESKTOP SIDEBAR (w-96 pinned left)
+            Hidden on Mobile, Displayed on md+ 
+        ===========================================*/}
+        <div className="hidden md:flex flex-col w-96 h-screen overflow-y-auto bg-card border-r border-border shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 flex-shrink-0">
+           <div className="p-6">
+              <h2 className="text-2xl font-bold text-foreground mb-6">Campus Commute</h2>
+              
+              {/* Desktop Route Selection Carousel */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Select Route</h3>
+                  <div className="flex gap-1">
+                    <button onClick={() => handleScroll("left")} className="p-1 hover:bg-muted rounded-full">
+                      <ChevronLeft className="w-5 h-5 text-foreground" />
+                    </button>
+                    <button onClick={() => handleScroll("right")} className="p-1 hover:bg-muted rounded-full">
+                      <ChevronRight className="w-5 h-5 text-foreground" />
+                    </button>
+                  </div>
+                </div>
+
+                <div 
+                  id="routes-container-desktop"
+                  className="flex gap-4 overflow-x-auto pb-4 scroll-smooth hide-scrollbar"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {routes.map((route) => (
+                    <button
+                      key={route.busNumber + "desktop"}
+                      onClick={() => setSelectedRoute(route)}
+                      className={`flex flex-col items-center min-w-[70px] transition-all relative ${
+                        selectedRoute.busNumber === route.busNumber ? "scale-105" : ""
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
+                          selectedRoute.busNumber === route.busNumber 
+                            ? "bg-primary text-primary-foreground shadow-md" 
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <Bus className="w-6 h-6" />
+                      </div>
+                      <span className={`text-[11px] mt-2 text-center whitespace-nowrap leading-tight ${
+                        selectedRoute.busNumber === route.busNumber ? "text-foreground font-semibold" : "text-muted-foreground"
+                      }`}>
+                        {route.busName}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Desktop Stop details */}
+              <div className="bg-muted/50 rounded-2xl p-5 mb-6 border border-border/50">
+                 <h3 className="font-semibold text-foreground text-lg mb-1">{selectedRoute.routeName}</h3>
+                 <p className="text-sm text-muted-foreground">{selectedRoute.startPoint.name} to {selectedRoute.endPoint.name}</p>
+                 
+                 <div className="grid grid-cols-2 gap-4 mt-5">
+                   <div>
+                     <p className="text-xs text-muted-foreground mb-1">Timing</p>
+                     <p className="text-sm font-medium">{selectedRoute.classTime}</p>
+                   </div>
+                   {activeDriver && (
+                     <div>
+                       <p className="text-xs text-muted-foreground mb-1">Driver</p>
+                       <p className="text-sm font-medium">{activeDriver.name}</p>
+                     </div>
+                   )}
+                 </div>
+              </div>
+
+              {/* Desktop Timeline */}
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Stoppage Timeline</h3>
+              <div className="space-y-0">
+                {selectedRoute.stoppages.map((stop, index) => {
+                  const isFirst = index === 0;
+                  const isLast = index === selectedRoute.stoppages.length - 1;
+                  return (
+                  <div key={stop.name + "desktop"} className="flex items-start gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-4 h-4 rounded-full border-2 bg-background z-10 ${
+                         isFirst ? "border-green-500" : isLast ? "border-red-500" : "border-primary"
+                      }`} />
+                      {!isLast && <div className="w-0.5 h-12 bg-border my-1" />}
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="text-sm font-medium text-foreground">{stop.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{stop.arrivalTime || "TBD"}</p>
+                    </div>
+                  </div>
+                )})}
+              </div>
+           </div>
         </div>
 
-        {/* Overlay gradient for better readability */}
-        <div className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-b from-background/30 via-background/20 to-background/50"></div>
+        {/* =========================================
+            MAP STRETCH ZONE (flex-1 fill right)
+        ===========================================*/}
+        <div className="flex-1 relative h-screen w-full bg-muted/20">
+          
+          {/* Leaflet Map Background (Filters removed for 100% vibrance) */}
+          <div className="absolute inset-0 z-0">
+            <RouteMap />
+          </div>
 
-        {/* Top Bar */}
-        <div className="absolute top-0 left-0 right-0 z-10 px-6 pt-12 pb-4">
-          <div className="flex items-center justify-between">
+          {/* Map Top-Gradient Shadow (ensures top bar icons are readable) */}
+          <div className="absolute top-0 left-0 right-0 h-32 z-[1] pointer-events-none bg-gradient-to-b from-background/40 to-transparent"></div>
+
+          {/* Top Floating Control Bar */}
+          <div className="absolute top-0 left-0 right-0 z-10 px-6 pt-12 pb-4 pointer-events-none flex items-center justify-between">
             <button 
               onClick={() => setSidebarOpen(true)}
-              className="p-2 -ml-2"
+              className="p-3 bg-background/80 backdrop-blur rounded-full shadow-sm pointer-events-auto hover:bg-background transition-colors"
             >
-              <Menu className="w-6 h-6 text-foreground" />
+              <Menu className="w-5 h-5 text-foreground" />
             </button>
             
-            <div className="flex items-center gap-2">
+            <div className="bg-background/80 backdrop-blur px-4 py-2 rounded-full shadow-sm flex items-center gap-2 pointer-events-auto border border-border/50">
               <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-sm text-foreground">Your Current Location</span>
+              <span className="text-sm font-medium text-foreground">Active Tracker</span>
             </div>
 
             <button 
               onClick={() => setNotificationsOpen(true)}
-              className="p-2 -mr-2 relative"
+              className="p-3 bg-background/80 backdrop-blur rounded-full shadow-sm relative pointer-events-auto hover:bg-background transition-colors"
             >
-              <Bell className="w-6 h-6 text-foreground" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+              <Bell className="w-5 h-5 text-foreground" />
+              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-destructive border-2 border-background rounded-full" />
             </button>
           </div>
-        </div>
 
-        {/* Status Chip with ETA */}
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-10">
-          <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-full text-sm shadow-lg flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            <span>Reaching your stop in {eta} min</span>
-          </div>
-        </div>
-
-        {/* Bus Icon on Map */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 z-10">
-          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-lg animate-pulse">
-            <Bus className="w-6 h-6 text-primary-foreground" />
-          </div>
-        </div>
-
-        {/* Bottom Sheet */}
-        <div 
-          className={`absolute bottom-0 left-0 right-0 bg-card rounded-t-3xl shadow-lg transition-all duration-300 z-20 ${
-            bottomSheetExpanded ? "h-[55%]" : "h-32"
-          }`}
-        >
-          <div className="px-6 pt-4">
-            {/* Handle */}
-            <button 
-              onClick={() => setBottomSheetExpanded(!bottomSheetExpanded)}
-              className="w-full flex justify-center mb-4"
-            >
-              {bottomSheetExpanded ? (
-                <ChevronDown className="w-6 h-6 text-muted-foreground" />
-              ) : (
-                <ChevronUp className="w-6 h-6 text-muted-foreground" />
-              )}
-            </button>
-
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-card-foreground">
-                  {routeInfo?.number || "Route no.1"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {routeInfo?.stops?.length ? `${routeInfo.stops[0]} to ${routeInfo.stops[routeInfo.stops.length - 1]}` : "Kottur to Campus"}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                  <Bus className="w-5 h-5 text-muted-foreground" />
-                </div>
+          {/* ETA Pill constraint absolute tracking over map */}
+          {liveBusPosition && (
+            <div className="absolute top-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <div className="bg-primary/95 backdrop-blur text-primary-foreground px-5 py-2.5 rounded-full text-sm shadow-xl flex items-center gap-2 border border-primary-foreground/20">
+                <Clock className="w-4 h-4" />
+                <span className="font-medium whitespace-nowrap">Incoming in ~{eta} min</span>
               </div>
             </div>
+          )}
 
-            {/* Route and ETA Info */}
-            {bottomSheetExpanded && (
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-muted rounded-xl p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Timing</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {routeInfo?.timing || "06:00 AM"}
+          {/* =========================================
+              MOBILE BOTTOM SHEET (Hidden on md+)
+          ===========================================*/}
+          <div 
+            className={`md:hidden absolute bottom-0 left-0 right-0 bg-background rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 z-20 flex flex-col ${
+              bottomSheetExpanded ? "h-[65%]" : "h-32"
+            }`}
+          >
+            <div className="px-6 pt-4 flex-1 flex flex-col overflow-hidden">
+              <button 
+                onClick={() => setBottomSheetExpanded(!bottomSheetExpanded)}
+                className="w-full flex justify-center mb-4 pb-2"
+              >
+                {bottomSheetExpanded ? (
+                  <ChevronDown className="w-6 h-6 text-muted-foreground" />
+                ) : (
+                  <ChevronUp className="w-6 h-6 text-muted-foreground" />
+                )}
+              </button>
+
+              <div className="flex items-center justify-between mb-6 flex-shrink-0">
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">
+                    {selectedRoute.busName}
+                  </h3>
+                  <p className="text-sm font-medium text-muted-foreground mt-0.5">
+                    {selectedRoute.startPoint.name} <span className="opacity-50 mx-1">→</span> {selectedRoute.endPoint.name}
                   </p>
                 </div>
-                <div className="bg-muted rounded-xl p-3 flex flex-col items-end">
-  <p className="text-xs text-muted-foreground mb-1">
-    ETA
-  </p>
-  <p className="text-sm font-medium text-foreground flex items-center gap-1">
-    <Clock className="w-4 h-4 text-primary" />
-    {eta} min
-  </p>
-</div>
-
-                {routeInfo?.assignedBus && (
-                  <div className="bg-muted rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Bus</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {routeInfo.assignedBus}
-                    </p>
-                  </div>
-                )}
-                {routeInfo?.assignedDriver && (
-                  <div className="bg-muted rounded-xl p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Driver</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {routeInfo.assignedDriver}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {bottomSheetExpanded && (
-              <>
-                {/* Timeline */}
-                <div className="space-y-0 mb-6">
-                  {stops.map((stop, index) => (
-                    <div key={stop.name} className="flex items-start gap-4">
-                      <div className="flex flex-col items-center">
-                        <div 
-                          className={`w-4 h-4 rounded-full border-2 ${
-                            stop.status === "passed" 
-                              ? "bg-primary border-primary" 
-                              : stop.status === "current"
-                              ? "bg-primary border-primary animate-pulse"
-                              : "bg-muted border-muted-foreground"
-                          }`}
-                        />
-                        {index < stops.length - 1 && (
-                          <div className={`w-0.5 h-8 ${
-                            stop.status === "passed" ? "bg-primary" : "bg-muted"
-                          }`} />
-                        )}
-                      </div>
-                      <div className="flex-1 flex justify-between pb-6">
-                        <span className={`text-sm ${
-                          stop.status === "current" ? "text-primary font-medium" : "text-card-foreground"
-                        }`}>
-                          {stop.name}
-                        </span>
-                        <span className="text-sm text-muted-foreground">{stop.time}</span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Bus className="w-6 h-6 text-primary" />
                 </div>
+              </div>
 
-                <GradientButton 
-                  onClick={() => setShowRouteDetails(true)}
-                  className="w-full"
-                >
-                  View Route Details
-                </GradientButton>
-              </>
-            )}
+              {bottomSheetExpanded && (
+                <div className="flex-1 overflow-y-auto hide-scrollbar pb-6 space-y-6">
+                   <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-muted rounded-2xl p-4">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Timing</p>
+                      <p className="text-sm font-bold text-foreground">{selectedRoute.classTime}</p>
+                    </div>
+                    <div className="bg-muted rounded-2xl p-4">
+                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">ETA</p>
+                      <p className="text-sm font-bold text-primary flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {eta} min
+                      </p>
+                    </div>
+                   </div>
+
+                   <div>
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Live Timeline</h4>
+                      <div className="space-y-0">
+                        {selectedRoute.stoppages.map((stop, index) => {
+                          const isFirst = index === 0;
+                          const isLast = index === selectedRoute.stoppages.length - 1;
+                          return (
+                          <div key={stop.name + "mobile"} className="flex items-start gap-4">
+                            <div className="flex flex-col items-center">
+                              <div className={`w-3.5 h-3.5 rounded-full border-2 bg-background z-10 ${
+                                isFirst ? "border-green-500" : isLast ? "border-red-500" : "border-primary"
+                              }`} />
+                              {!isLast && <div className="w-0.5 h-10 bg-border my-1" />}
+                            </div>
+                            <div className="flex-1 pb-4 flex justify-between items-center -mt-1">
+                              <span className="text-[15px] font-medium text-foreground">{stop.name}</span>
+                              <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-md">{stop.arrivalTime || "TBD"}</span>
+                            </div>
+                          </div>
+                        )})}
+                      </div>
+                   </div>
+                </div>
+              )}
+            </div>
           </div>
+          {/* END MOBILE BOTTOM SHEET */}
+          
         </div>
-
-        {/* Sidebar */}
+        
+        {/* Global Floating Handlers */}
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-        {/* Notifications */}
-        <NotificationSheet 
-          open={notificationsOpen} 
-          onClose={() => setNotificationsOpen(false)} 
-        />
-
-        {/* Route Details Modal */}
-        {routeInfo && (
-          <RouteDetailsModal
-            open={showRouteDetails}
-            onClose={() => setShowRouteDetails(false)}
-            routeNumber={routeInfo.number}
-            stops={routeInfo.stops}
-            timing={routeInfo.timing}
-            eta={eta}
-            assignedBus={routeInfo.assignedBus}
-            assignedDriver={routeInfo.assignedDriver}
-            conductorName={routeInfo.conductorName}
-            conductorPhone={routeInfo.conductorPhone}
-          />
-        )}
+        <NotificationSheet open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+        
       </div>
     </MobileLayout>
   );

@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+
 export type UserRole = "student" | "driver" | "admin" | null;
 
 interface UserData {
@@ -10,7 +12,6 @@ interface UserData {
   routeNo?: string;
   timing?: string;
   selectedRoute?: number;
-  password?: string;
   phoneNumber?: string;
   branch?: string;
   course?: string;
@@ -18,6 +19,8 @@ interface UserData {
   profileImage?: string;
   busNumber?: string;
   licenseId?: string;
+  registrationNo?: string;
+  busStop?: string;
 }
 
 interface AuthContextType {
@@ -45,81 +48,75 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [pendingEmail, setPendingEmail] = useState("");
   const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>({});
 
+  // ====== LOGIN — calls real backend API ======
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    // Get account from localStorage
-    const registeredAccounts = JSON.parse(
-      localStorage.getItem("campus-commute-accounts") || "[]"
-    );
-    const account = registeredAccounts.find(
-      (acc: any) => acc.email === email && acc.role === role && acc.password === password
-    );
+    try {
+      const response = await fetch(`${BACKEND_URL}/user/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // required for cross-origin cookie (Vercel + Render)
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (!account) {
+      if (!response.ok) return false;
+
+      const data = await response.json();
+
+      setIsAuthenticated(true);
+      setUser({
+        email: data.user.email,
+        fullName: data.user.fullname || data.user.fullName || "",
+        role: role, // role is determined by the login page selection on the frontend
+        selectedRoute: 1,
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Login error:", error);
       return false;
     }
-
-    setIsAuthenticated(true);
-    setUser({
-      email: account.email,
-      fullName: account.fullName,
-      role: account.role,
-      password: account.password,
-      yearBatch: account.yearBatch,
-      routeNo: account.routeNo,
-      timing: account.timing,
-      selectedRoute: account.selectedRoute || 1,
-      phoneNumber: account.phoneNumber,
-      branch: account.branch,
-      course: account.course,
-      semester: account.semester,
-      profileImage: account.profileImage,
-      busNumber: account.busNumber,
-      licenseId: account.licenseId,
-    });
-    return true;
   };
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
-    setPendingRole(null);
-    setPendingEmail("");
-    setPendingUserData({});
+  // ====== LOGOUT — calls real backend API ======
+  const logout = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/user/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Always clear state regardless of API response
+      setIsAuthenticated(false);
+      setUser(null);
+      setPendingRole(null);
+      setPendingEmail("");
+      setPendingUserData({});
+    }
   };
 
+  // ====== COMPLETE SIGNUP — called after registration API flow ======
   const completeSignup = (data: Partial<UserData>) => {
     setIsAuthenticated(true);
     setUser({
-      email: pendingEmail,
-      fullName: pendingUserData.fullName || "",
-      role: pendingRole,
-      yearBatch: pendingUserData.yearBatch,
-      routeNo: pendingUserData.routeNo,
-      timing: pendingUserData.timing,
+      email: data.email || pendingEmail,
+      fullName: data.fullName || pendingUserData.fullName || "",
+      role: data.role || pendingRole,
+      yearBatch: data.yearBatch || pendingUserData.yearBatch,
+      routeNo: data.routeNo || pendingUserData.routeNo,
+      timing: data.timing || pendingUserData.timing,
+      selectedRoute: data.selectedRoute || 1,
       ...data,
     });
     setPendingEmail("");
     setPendingUserData({});
   };
 
+  // ====== UPDATE USER — local state update only ======
   const updateUser = (data: Partial<UserData>) => {
     if (user) {
-      const updated = { ...user, ...data };
-      setUser(updated);
-
-      // Persist updates to registered accounts in localStorage if present
-      try {
-        const registeredAccounts = JSON.parse(
-          localStorage.getItem("campus-commute-accounts") || "[]"
-        );
-        const idx = registeredAccounts.findIndex((acc: any) => acc.email === user.email && acc.role === user.role);
-        if (idx !== -1) {
-          registeredAccounts[idx] = { ...registeredAccounts[idx], ...data };
-          localStorage.setItem("campus-commute-accounts", JSON.stringify(registeredAccounts));
-        }
-      } catch (err) {
-        // ignore
-      }
+      setUser({ ...user, ...data });
     }
   };
 

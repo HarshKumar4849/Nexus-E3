@@ -1,40 +1,69 @@
 const express = require('express');
+const http = require('http');
 const app = express();
+
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const path = require('path');
 require('dotenv').config();
-const port = process.env.BACKEND_PORT;
+
+const { getAllRoutes, getRouteByBus } = require('./controllers/routeController');
+const { initSocket } = require('./config/socket');
 const connectDB = require('./config/connectDB');
 
-//importing routes
-const userRouter = require('./routes/userRouter');
+// ====== CONFIG ======
+// Render injects PORT automatically; BACKEND_PORT used as local fallback
+const port = process.env.PORT || process.env.BACKEND_PORT || 8000;
 
-// Middleware
+const allowedOrigins = process.env.FRONTEND_URL
+  ? [process.env.FRONTEND_URL]
+  : ['http://localhost:8080', 'http://localhost:5173'];
+
+// ====== CREATE HTTP SERVER ======
+const server = http.createServer(app);
+
+// ====== MIDDLEWARE ======
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS policy: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(express.json());
 app.use(cookieParser());
 
+// ====== DATABASE ======
+connectDB()
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => {
+    console.error('❌ DB connection failed:', err.message);
+  });
 
-// Connect to database with error handling
-connectDB().catch(err => {
-  console.error("Failed to connect to database:", err.message);
-  // Continue running the server even if DB connection fails
+// ====== HEALTH CHECK (used by Render) ======
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-
-
-// basic route for health check
+// ====== ROUTES ======
 app.get('/', (req, res) => {
-  res.send('server is running....');
+  res.json({ message: 'Campus Commute API is running 🚀' });
 });
 
+const userRouter = require('./routes/userRouter');
 app.use('/user', userRouter);
 
+app.get('/routes', getAllRoutes);
+app.get('/routes/:busId', getRouteByBus);
 
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+// ====== SOCKET.IO INIT ======
+initSocket(server, allowedOrigins);
+
+// ====== START SERVER ======
+server.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
 });

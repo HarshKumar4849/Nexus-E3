@@ -50,15 +50,17 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
     setIsDeleting(true);
 
     try {
-      // Simulate password verification (in real app, verify with backend)
       const registeredAccounts = JSON.parse(
-        localStorage.getItem("registeredAccounts") || "[]"
-      );
-      const accountExists = registeredAccounts.some(
-        (acc: any) => acc.email === user?.email && acc.password === password
+        localStorage.getItem("campus-commute-accounts") || "[]"
       );
 
-      if (!accountExists) {
+      // We explicitly search the local storage array instead of checking the user Context password natively. 
+      // This is because the 'completeSignup' function omits password injection into Context during fresh signups.
+      const targetAccount = registeredAccounts.find(
+        (acc: any) => acc.email === user?.email
+      );
+
+      if (!targetAccount || targetAccount.password !== password) {
         toast({
           title: "Error",
           description: "Password is incorrect.",
@@ -73,11 +75,11 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
         (acc: any) => acc.email !== user?.email
       );
       localStorage.setItem(
-        "registeredAccounts",
+        "campus-commute-accounts",
         JSON.stringify(updatedAccounts)
       );
 
-      // Clear all user data
+      // Clear current authenticating session markers
       localStorage.removeItem("currentUser");
       localStorage.removeItem("studentData");
       localStorage.removeItem("driverData");

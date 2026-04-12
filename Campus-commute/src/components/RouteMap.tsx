@@ -1,274 +1,240 @@
-import React, { useEffect, useRef } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+// @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, GeoJSON, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { io } from 'socket.io-client';
+import 'leaflet-routing-machine';
+import { useRouteContext } from '../contexts/RouteContext';
+import { useToast } from "@/hooks/use-toast";
 
-interface Stop {
-  name: string;
-  lat: number;
-  lng: number;
-  status: "passed" | "current" | "upcoming";
-  time: string;
-}
-
-interface RouteMapProps {
-  stops: Stop[];
-  routeNumber?: string;
-}
-
-// Fix leaflet default icon issue
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-});
-
-const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const bearing = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const toDeg = (r: number) => (r * 180) / Math.PI;
-  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
-  const x =
-    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+// Helper to auto-recenter the map on the live position or start position
+const RecenterMap = ({ lat, lng }: { lat: number; lng: number }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (lat && lng) {
+      map.setView([lat, lng], 14, { animate: true, duration: 1 });
+    }
+  }, [lat, lng, map]);
+  return null;
 };
 
-const RouteMap: React.FC<RouteMapProps> = ({ stops, routeNumber = "Route" }) => {
-  const mapRef = useRef<L.Map | null>(null);
-  const userMarkerRef = useRef<L.Marker | null>(null);
-  const busMarkerRef = useRef<L.Marker | null>(null);
-  const completedLineRef = useRef<L.Polyline | null>(null);
-  const remainingLineRef = useRef<L.Polyline | null>(null);
-  const watchIdRef = useRef<number | null>(null);
-  const animationRef = useRef<number | null>(null);
+// Map Icon Defines
+const StartIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:20px;height:20px;background-color:#10b981;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+  iconAnchor: [10, 10]
+});
 
-  // Initialize map once
+const EndIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:24px;height:24px;background-color:#ef4444;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center;"><div style="width:8px;height:8px;background:white;border-radius:50%"></div></div>`,
+  iconAnchor: [12, 12]
+});
+
+const BusIcon = L.divIcon({
+  className: 'live-bus-marker',
+  html: `<div style="width:40px;height:40px;background-color:#0f766e;border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,0.4);"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/></svg></div>`,
+  iconAnchor: [20, 20]
+});
+
+const RoutingControl = ({ stops, setIsRouteBusy }: { stops: any[], setIsRouteBusy: (b: boolean) => void }) => {
+  const map = useMap();
+
   useEffect(() => {
-    if (!document.getElementById("route-map-keyframes")) {
-      const style = document.createElement("style");
-      style.id = "route-map-keyframes";
-      style.innerHTML = `
-        @keyframes pulse {
-          0% { box-shadow: 0 0 0 0 rgba(14,165,233,0.18); }
-          70% { box-shadow: 0 0 0 12px rgba(14,165,233,0); }
-          100% { box-shadow: 0 0 0 0 rgba(14,165,233,0); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
+    if (!map || !stops || stops.length < 2) return;
 
-    const mapInstance = L.map("route-map", {
-      zoomControl: true,
-      attributionControl: false,
-    }).setView([stops[0]?.lat || 13.0827, stops[0]?.lng || 80.2707], 13);
+    const waypoints = stops.map((s: any) => L.latLng(s.coordinates.lat, s.coordinates.lng));
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap",
-    }).addTo(mapInstance);
-
-    // Locate control (centers on user marker)
-    const locateControl = L.control({ position: "topright" });
-    locateControl.onAdd = function () {
-      const container = L.DomUtil.create("div", "leaflet-bar rounded bg-white shadow p-1 m-2 cursor-pointer");
-      container.style.display = "flex";
-      container.style.alignItems = "center";
-      container.style.justifyContent = "center";
-      container.style.width = "38px";
-      container.style.height = "38px";
-      container.title = "Center on my location";
-      container.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor' class='w-5 h-5 text-primary'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 2v2m0 16v2m10-10h-2M4 12H2m15.364-6.364l-1.414 1.414M7.05 16.95l-1.414 1.414M16.95 16.95l1.414 1.414M6.343 6.343L4.93 4.93' /></svg>`;
-
-      L.DomEvent.on(container, "click", () => {
-        const m = mapRef.current;
-        const um = userMarkerRef.current;
-        if (m && um) {
-          m.setView(um.getLatLng(), 15, { animate: true });
-        }
-      });
-
-      return container;
-    };
-    locateControl.addTo(mapInstance);
-
-    mapRef.current = mapInstance;
-
-    return () => {
-      if (watchIdRef.current && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
+    const control = L.Routing.control({
+      waypoints,
+      routeWhileDragging: false,
+      addWaypoints: false,
+      draggableWaypoints: false,
+      showAlternatives: true,
+      fitSelectedRoutes: true,
+      show: false, // Hide default ugly itinerary
+      lineOptions: {
+        styles: [{ color: '#0ea5e9', opacity: 1, weight: 6 }]
+      },
+      altLineOptions: {
+        styles: [{ color: '#9ca3af', opacity: 0.8, weight: 5 }]
       }
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      mapInstance.remove();
-      mapRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Render stops, lines, user and bus
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    // Clear previous layers except tile layer
-    map.eachLayer((layer) => {
-      if ((layer as any)._url) return; // tile layer has _url
-      try {
-        map.removeLayer(layer);
-      } catch (e) {
-        // ignore
-      }
-    });
-
-    if (stops.length === 0) return;
-
-    // Build coordinates
-    const coords: [number, number][] = stops.map((s) => [s.lat, s.lng]);
-
-    // Add stop markers
-    stops.forEach((stop, idx) => {
-      const isCurrent = stop.status === "current";
-      const isPassed = stop.status === "passed";
-      const color = isPassed ? "#22c55e" : isCurrent ? "#3b82f6" : "#94a3b8";
-
-      const el = L.DomUtil.create("div", "stop-marker");
-      el.style.width = "36px";
-      el.style.height = "36px";
-      el.style.borderRadius = "50%";
-      el.style.background = color;
-      el.style.border = "3px solid white";
-      el.style.display = "flex";
-      el.style.alignItems = "center";
-      el.style.justifyContent = "center";
-      el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
-      el.innerText = String(idx + 1);
-      if (isCurrent) el.style.animation = "pulse 2s infinite";
-
-      L.marker([stop.lat, stop.lng], {
-        icon: L.divIcon({ html: el.outerHTML, className: "", iconSize: [36, 36], iconAnchor: [18, 18] }),
-      })
-        .addTo(map)
-        .bindPopup(`<strong>${stop.name}</strong><br/>Time: ${stop.time}`);
-    });
-
-    // Draw full route dashed for remaining and solid for completed
-    const fullLine = L.polyline(coords, { color: "#3b82f6", weight: 3, opacity: 0.25, dashArray: "6,6" }).addTo(map);
-
-    // Bus marker simulation
-    let busPosIndex = 0;
-    let busT = 0; // interpolation between stops[busPosIndex] -> stops[busPosIndex+1]
-
-    const busEl = L.DomUtil.create("div", "bus-marker");
-    busEl.style.width = "40px";
-    busEl.style.height = "24px";
-    busEl.style.background = "#0ea5e9";
-    busEl.style.borderRadius = "6px";
-    busEl.style.display = "flex";
-    busEl.style.alignItems = "center";
-    busEl.style.justifyContent = "center";
-    busEl.style.color = "white";
-    busEl.style.fontSize = "12px";
-    busEl.style.transformOrigin = "center";
-    busEl.innerText = "BUS";
-
-    const busMarker = L.marker(coords[0], {
-      icon: L.divIcon({ html: busEl.outerHTML, className: "", iconSize: [40, 24], iconAnchor: [20, 12] }),
     }).addTo(map);
-    busMarkerRef.current = busMarker;
 
-    // Completed and remaining polylines
-    const completedLine = L.polyline([coords[0]], { color: "#1f2937", weight: 4, opacity: 0.9 }).addTo(map);
-    const remainingLine = L.polyline(coords, { color: "#3b82f6", weight: 3, opacity: 0.5, dashArray: "6,6" }).addTo(map);
-    completedLineRef.current = completedLine;
-    remainingLineRef.current = remainingLine;
-
-    // Fit bounds
-    if (coords.length) map.fitBounds(coords as any, { padding: [60, 60] });
-
-    // Animation loop
-    let lastTime = performance.now();
-    const speed = 0.00005; // tune as needed
-
-    const animate = (now: number) => {
-      const dt = now - lastTime;
-      lastTime = now;
-
-      if (stops.length > 1) {
-        busT += dt * speed;
-        while (busT >= 1 && busPosIndex < stops.length - 2) {
-          busT -= 1;
-          busPosIndex++;
-        }
-        const a = stops[busPosIndex];
-        const b = stops[Math.min(busPosIndex + 1, stops.length - 1)];
-        const lat = lerp(a.lat, b.lat, clamp(busT));
-        const lng = lerp(a.lng, b.lng, clamp(busT));
-        busMarker.setLatLng([lat, lng]);
-
-        // rotate based on bearing
-        const head = bearing(a.lat, a.lng, b.lat, b.lng);
-        const el = (busMarker.getElement() as HTMLElement | null);
-        if (el) el.style.transform = `rotate(${head}deg)`;
-
-        // update polylines
-        const completedCoords = coords.slice(0, busPosIndex + 1).concat([[lat, lng]] as any);
-        completedLine.setLatLngs(completedCoords as any);
-        remainingLine.setLatLngs([[lat, lng]].concat(coords.slice(busPosIndex + 1) as any));
+    control.on('routesfound', function(e: any) {
+      if (e.routes && e.routes.length > 1) {
+        setIsRouteBusy(true);
+      } else {
+        setIsRouteBusy(false);
       }
-
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    animationRef.current = requestAnimationFrame(animate);
-
-    // User geolocation
-    if (navigator.geolocation) {
-      const userEl = L.DomUtil.create("div", "user-marker");
-      userEl.style.width = "18px";
-      userEl.style.height = "18px";
-      userEl.style.borderRadius = "50%";
-      userEl.style.background = "rgba(14,165,233,0.9)";
-      userEl.style.boxShadow = "0 0 0 6px rgba(14,165,233,0.18)";
-      userEl.style.border = "2px solid white";
-
-      const userMarker = L.marker(coords[0] || [13.0827, 80.2707], {
-        icon: L.divIcon({ html: userEl.outerHTML, className: "", iconSize: [18, 18], iconAnchor: [9, 9] }),
-      }).addTo(map);
-      userMarkerRef.current = userMarker;
-
-      const id = navigator.geolocation.watchPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          userMarker.setLatLng([lat, lng]);
-        },
-        () => {
-          // ignore
-        },
-        { enableHighAccuracy: true, maximumAge: 1000 }
-      );
-      watchIdRef.current = id as unknown as number;
-    }
+    });
 
     return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      if (watchIdRef.current && navigator.geolocation) navigator.geolocation.clearWatch(watchIdRef.current);
       try {
-        map.removeLayer(completedLine);
-      } catch (e) {}
-      try {
-        map.removeLayer(remainingLine);
-      } catch (e) {}
-      try {
-        map.removeLayer(busMarker);
+        map.removeControl(control);
       } catch (e) {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stops]);
+  }, [map, stops, setIsRouteBusy]);
 
-  return <div id="route-map" className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden" />;
+  return null;
+};
+
+const RouteMap: React.FC<any> = () => {
+  const { selectedRoute, liveBusPosition, setLiveBusPosition } = useRouteContext();
+  const { toast } = useToast();
+  
+  const [visitedStops, setVisitedStops] = useState<Set<string>>(new Set());
+  const [isRouteBusy, setIsRouteBusy] = useState(false);
+
+  if (!selectedRoute || !selectedRoute.stoppages || selectedRoute.stoppages.length === 0) {
+    return <div className="w-full h-full min-h-[50vh] flex items-center justify-center bg-slate-100 text-slate-500 font-medium">Loading Routes...</div>;
+  }
+
+  // Reset visited stops on route change
+  useEffect(() => {
+    setVisitedStops(new Set());
+  }, [selectedRoute]);
+
+  // 2. Websocket Bus Driver Connection
+  useEffect(() => {
+    const socketURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    const socket = io(socketURL);
+
+    // Subscrube to the native tracking room on Backend
+    if (selectedRoute && selectedRoute.busNumber) {
+      socket.emit("join-bus", { busId: selectedRoute.busNumber });
+    }
+
+    // Dynamic marker update
+    socket.on('driver-location-update', (data: { routeId: string, lat: number, lng: number }) => {
+      if (data.routeId === selectedRoute.busNumber) {
+         setLiveBusPosition([data.lat, data.lng]);
+      }
+    });
+
+    // Handle dropping the bus visibility when driver initiates shutdown
+    socket.on('bus-offline', (data: { routeId: string }) => {
+      if (data.routeId === selectedRoute.busNumber) {
+         setLiveBusPosition([undefined as any, undefined as any]);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [selectedRoute, setLiveBusPosition]);
+
+  // 3. Proximity Geofencing Toasting
+  useEffect(() => {
+    if (!liveBusPosition) return;
+
+    try {
+      const busLatLng = L.latLng(liveBusPosition[0], liveBusPosition[1]);
+
+      for (const stop of selectedRoute.stoppages) {
+        if (visitedStops.has(stop.name)) continue;
+
+        const stopLatLng = L.latLng(stop.coordinates.lat, stop.coordinates.lng);
+        const distanceMeters = busLatLng.distanceTo(stopLatLng);
+
+        // If Bus falls natively under 500 meters of an unvisited node
+        if (distanceMeters < 500) {
+          toast({
+            title: "Upcoming Stop Warning",
+            description: `${stop.name} - Arriving Shortly!`,
+          });
+          
+          setVisitedStops(prev => {
+            const newSet = new Set(prev);
+            newSet.add(stop.name);
+            return newSet;
+          });
+          
+          // Break to prevent rapid firing overlapping toasts for tight clusters
+          break;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [liveBusPosition, selectedRoute, visitedStops, toast]);
+
+  // Raw Fallback line
+  const rawFallbackCoords: [number, number][] = selectedRoute.stoppages.map(stop => [
+    stop.coordinates.lat, 
+    stop.coordinates.lng
+  ]);
+
+  const startPoint = rawFallbackCoords[0];
+  const endPoint = rawFallbackCoords[rawFallbackCoords.length - 1];
+
+  return (
+    <div className="w-full h-full min-h-[50vh] relative z-0">
+      
+      {/* Traffic Pill Overlays */}
+      <div className="absolute top-[180px] md:top-8 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none transition-all duration-500">
+        {isRouteBusy ? (
+          <div className="bg-amber-500/95 backdrop-blur text-white px-5 py-2.5 rounded-full text-xs md:text-sm shadow-xl flex items-center font-bold tracking-widest border-2 border-amber-400">
+            HEAVY TRAFFIC - SHOWING ALTERNATIVES
+          </div>
+        ) : (
+          <div className="bg-emerald-500/95 backdrop-blur text-white px-5 py-2.5 rounded-full text-xs md:text-sm shadow-xl flex items-center font-bold tracking-widest border-2 border-emerald-400">
+            FASTEST ROUTE
+          </div>
+        )}
+      </div>
+
+      {/* Dynamic CSS Injection to smoothly slide the Leaflet wrapper div 
+          preventing rigid socket frame-jumping natively */}
+      <style>{`
+        .live-bus-marker {
+          transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+        }
+        .leaflet-routing-alt {
+            display: none !important; /* Force hide the text itinerary panel if it pops up */
+        }
+      `}</style>
+
+      <MapContainer
+        center={startPoint} 
+        zoom={14} 
+        zoomControl={false}
+        className="w-full h-full min-h-screen z-0"
+      >
+        {/* Base Layer - Vibrant OpenStreetMap Standard */}
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {/* 
+          Placeholder Traffic TileLayer - Mapbox/TomTom
+          Uncomment and hook KEY later for real-time red/yellow traffic densities 
+        */}
+        {/* <TileLayer 
+          url="https://api.mapbox.com/styles/v1/mapbox/navigation-guidance-day-v4/tiles/{z}/{x}/{y}?access_token=YOUR_MAPBOX_KEY" 
+          opacity={0.5} 
+          zIndex={10} 
+        /> */}
+
+        <RecenterMap lat={startPoint[0]} lng={startPoint[1]} />
+
+        {/* Native Road Snapped Routing Machine */}
+        <RoutingControl stops={selectedRoute.stoppages} setIsRouteBusy={setIsRouteBusy} />
+
+        {/* Nodes */}
+        {startPoint && <Marker position={startPoint} icon={StartIcon} />}
+        {endPoint && <Marker position={endPoint} icon={EndIcon} />}
+        
+        {/* Live Animating Marker */}
+        {liveBusPosition && liveBusPosition[0] !== undefined && (
+           <Marker position={liveBusPosition} icon={BusIcon}></Marker>
+        )}
+
+      </MapContainer>
+    </div>
+  );
 };
 
 export default RouteMap;

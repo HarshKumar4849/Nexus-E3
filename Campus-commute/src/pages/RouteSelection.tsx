@@ -1,84 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bus, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { Bus, ChevronLeft, ChevronRight, Clock, MapPin, Navigation } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/BackButton";
-import { useAuth } from "@/contexts/AuthContext";
-
-interface Route {
-  id: string;
-  number: string;
-  stops: string[];
-  timing: string;
-  assignedBus?: string;
-  assignedDriver?: string;
-  conductorName?: string;
-  conductorPhone?: string;
-  eta?: number;
-}
-
-const initialRoutes = [
-  { id: 1, name: "Route no.1" },
-  { id: 2, name: "Route no.2" },
-  { id: 3, name: "Route no.3" },
-  { id: 4, name: "Route no.4" },
-  { id: 5, name: "Route no.5" },
-  { id: 6, name: "Route no.6" },
-  { id: 7, name: "Route no.7" },
-  { id: 8, name: "Route no.8" },
-  { id: 9, name: "Route no.9" },
-  { id: 10, name: "Route no.10" },
-];
+import { useRouteContext } from "@/contexts/RouteContext";
 
 const RouteSelection = () => {
   const navigate = useNavigate();
-  const { setSelectedRoute } = useAuth();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [routes, setRoutes] = useState<(typeof initialRoutes[0] | Route)[]>(initialRoutes);
+  const { routes, selectedRoute, setSelectedRoute } = useRouteContext();
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [selectedRouteDetails, setSelectedRouteDetails] = useState<Route | null>(null);
-
-  // Load routes from localStorage or use default
-  useEffect(() => {
-    const savedRoutes = localStorage.getItem("adminRoutes");
-    if (savedRoutes) {
-      try {
-        const parsedRoutes = JSON.parse(savedRoutes);
-        if (parsedRoutes.length > 0) {
-          setRoutes(parsedRoutes);
-        }
-      } catch {
-        setRoutes(initialRoutes);
-      }
-    }
-  }, []);
-
-  const handleSelectRoute = (routeId: number | string) => {
-    setSelectedId(routeId as number);
-    
-    // Try to find route details from admin routes
-    const savedRoutes = localStorage.getItem("adminRoutes");
-    if (savedRoutes) {
-      try {
-        const parsedRoutes = JSON.parse(savedRoutes) as Route[];
-        const routeNum = typeof routeId === "string" ? routeId : `Route ${routeId}`;
-        const route = parsedRoutes.find((r: Route) => r.number === routeNum);
-        if (route) {
-          setSelectedRouteDetails(route);
-        }
-      } catch {
-        setSelectedRouteDetails(null);
-      }
-    }
-  };
-
-  const handleContinue = () => {
-    if (selectedId) {
-      setSelectedRoute(selectedId);
-      navigate("/home");
-    }
-  };
 
   const handleScroll = (direction: "left" | "right") => {
     const container = document.getElementById("routes-container");
@@ -94,6 +25,10 @@ const RouteSelection = () => {
     }
   };
 
+  const activeDriver = selectedRoute.drivers && selectedRoute.drivers.length > 0 
+    ? selectedRoute.drivers[0] 
+    : null;
+
   return (
     <MobileLayout>
       <div className="flex flex-col min-h-screen px-8 py-6">
@@ -108,6 +43,7 @@ const RouteSelection = () => {
             Select Your Bus Route
           </h2>
 
+          {/* Horizontal Carousel */}
           <div className="flex items-center gap-3 mb-8">
             <button
               onClick={() => handleScroll("left")}
@@ -119,29 +55,36 @@ const RouteSelection = () => {
             <div
               id="routes-container"
               className="flex gap-4 overflow-x-auto pb-4 flex-1 scroll-smooth"
-              style={{ scrollBehavior: "smooth" }}
+              style={{ scrollBehavior: "smooth", scrollbarWidth: "none" }}
             >
               {routes.map((route) => (
                 <button
-                  key={route.id}
-                  onClick={() => handleSelectRoute(route.id)}
-                  className={`flex flex-col items-center min-w-[70px] transition-all ${
-                    selectedId === route.id ? "scale-110" : ""
+                  key={route.busNumber}
+                  onClick={() => setSelectedRoute(route)}
+                  className={`flex flex-col items-center min-w-[70px] transition-all relative ${
+                    selectedRoute.busNumber === route.busNumber ? "scale-110" : ""
                   }`}
                 >
                   <div 
                     className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
-                      selectedId === route.id 
-                        ? "bg-primary text-primary-foreground" 
+                      selectedRoute.busNumber === route.busNumber 
+                        ? "bg-primary text-primary-foreground shadow-md" 
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
                     <Bus className="w-7 h-7" />
                   </div>
-                  <span className={`text-sm mt-2 text-center ${
-                    selectedId === route.id ? "text-foreground font-medium" : "text-muted-foreground"
+                  
+                  {selectedRoute.busNumber === route.busNumber && (
+                    <div className="absolute top-0 right-0 bg-primary border-2 border-background text-white rounded-full p-0.5">
+                      <Navigation className="w-3 h-3" />
+                    </div>
+                  )}
+
+                  <span className={`text-sm mt-2 text-center whitespace-nowrap ${
+                    selectedRoute.busNumber === route.busNumber ? "text-foreground font-medium" : "text-muted-foreground"
                   }`}>
-                    {"number" in route ? route.number : route.name}
+                    {route.busName}
                   </span>
                 </button>
               ))}
@@ -155,25 +98,25 @@ const RouteSelection = () => {
             </button>
           </div>
 
-          {/* Selected Route Details */}
-          {selectedRouteDetails && (
+          {/* Selected Route Details Panel */}
+          {selectedRoute && (
             <div className="mt-8 bg-muted rounded-2xl p-6 space-y-4">
               <h3 className="text-lg font-semibold text-foreground">
-                {selectedRouteDetails.number}
+                {selectedRoute.routeName}
               </h3>
 
-              {/* Stops */}
+              {/* Stops Preview */}
               <div>
                 <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-primary" />
-                  Route Stops
+                  Route Endpoints
                 </p>
                 <p className="text-sm text-foreground">
-                  {selectedRouteDetails.stops.join(" → ")}
+                  {selectedRoute.startPoint.name} <span className="mx-2">→</span> {selectedRoute.endPoint.name}
                 </p>
               </div>
 
-              {/* Timing & ETA */}
+              {/* Timing */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
@@ -181,56 +124,45 @@ const RouteSelection = () => {
                     Timing
                   </p>
                   <p className="text-sm font-medium text-foreground">
-                    {selectedRouteDetails.timing}
+                    {selectedRoute.classTime}
                   </p>
                 </div>
-                {selectedRouteDetails.eta && (
+              </div>
+
+              {/* Bus & Driver Info */}
+              <div className="grid grid-cols-2 gap-3">
+                {selectedRoute.arrivalBus && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      ETA
-                    </p>
+                    <p className="text-xs text-muted-foreground mb-1">Bus</p>
                     <p className="text-sm font-medium text-foreground">
-                      {selectedRouteDetails.eta} min
+                      {selectedRoute.arrivalBus}
+                    </p>
+                  </div>
+                )}
+                {activeDriver && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Driver</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {activeDriver.name}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Bus & Driver Info */}
-              {(selectedRouteDetails.assignedBus || selectedRouteDetails.assignedDriver) && (
-                <div className="grid grid-cols-2 gap-3">
-                  {selectedRouteDetails.assignedBus && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Bus</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedRouteDetails.assignedBus}
-                      </p>
-                    </div>
-                  )}
-                  {selectedRouteDetails.assignedDriver && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Driver</p>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedRouteDetails.assignedDriver}
-                      </p>
-                    </div>
-                  )}
+              {activeDriver?.contact && (
+                <div className="pt-2 border-t border-background">
+                  <p className="text-xs text-muted-foreground mb-1">Driver Contact</p>
+                  <p className="text-sm font-medium text-primary">
+                    +91 {activeDriver.contact}
+                  </p>
                 </div>
               )}
-
-              {/* Conductor Info */}
-              {selectedRouteDetails.conductorName && (
-                <div className="pt-2 border-t border-background">
-                  <p className="text-xs text-muted-foreground mb-2">Conductor</p>
-                  <p className="text-sm text-foreground">
-                    {selectedRouteDetails.conductorName}
+              
+              {selectedRoute.remarks && (
+                <div className="pt-2">
+                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-100">
+                    * {selectedRoute.remarks}
                   </p>
-                  {selectedRouteDetails.conductorPhone && (
-                    <p className="text-xs text-primary mt-1">
-                      {selectedRouteDetails.conductorPhone}
-                    </p>
-                  )}
                 </div>
               )}
             </div>
@@ -238,10 +170,9 @@ const RouteSelection = () => {
 
           <div className="mt-12">
             <GradientButton 
-              onClick={handleContinue}
-              disabled={!selectedId}
+              onClick={() => navigate("/home")}
             >
-              Continue
+              Continue to Live Tracker
             </GradientButton>
           </div>
         </div>
