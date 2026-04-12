@@ -1,8 +1,17 @@
-const userModel = require("../models/userModel");
+const userModel = require("../models/UserModel");
 const generateToken = require("../utils/generateToken");
 const bcrypt = require("bcrypt");
 const otpModel = require("../models/otpModel");
 const nodemailer = require("nodemailer");
+
+// Cookie options — SameSite=None + Secure required for cross-origin (Vercel + Render)
+const isProduction = process.env.NODE_ENV === 'production';
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction,          // HTTPS only in production
+  sameSite: isProduction ? 'none' : 'lax',  // cross-origin in prod, relaxed in dev
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+};
 module.exports.register = async (req, res) => {
   try {
     // Check if req.body exists
@@ -37,8 +46,8 @@ module.exports.register = async (req, res) => {
 
     // Generate JWT token
     let token = generateToken(newUser);
-        
-    res.cookie("token", token);
+
+    res.cookie("token", token, cookieOptions);
     
     res.status(201).json({
       success: true,
@@ -70,7 +79,7 @@ module.exports.login = async (req, res) => {
     bcrypt.compare(password, user.password, function (err, result) {
       if (result) {
         let token = generateToken(user);
-        res.cookie("token", token);
+        res.cookie("token", token, cookieOptions);
         res.status(200).json({ 
           message: "Login successful", 
           user: {
