@@ -59,9 +59,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsAuthenticated(false);
     }
   }, [user]);
-  const [pendingRole, setPendingRole] = useState<UserRole>(null);
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>({});
+  const [pendingRole, setPendingRole] = useState<UserRole>(() => {
+    try { return JSON.parse(localStorage.getItem("cc-pending-role") || "null"); } catch { return null; }
+  });
+  const [pendingEmail, setPendingEmail] = useState(() => {
+    return localStorage.getItem("cc-pending-email") || "";
+  });
+  const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>(() => {
+    try { return JSON.parse(localStorage.getItem("cc-pending-data") || "{}"); } catch { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("cc-pending-role", JSON.stringify(pendingRole));
+    localStorage.setItem("cc-pending-email", pendingEmail);
+    localStorage.setItem("cc-pending-data", JSON.stringify(pendingUserData));
+  }, [pendingRole, pendingEmail, pendingUserData]);
 
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
     try {
