@@ -37,7 +37,9 @@ app.get('/', (req, res) => {
 });
 
 const userRouter = require('./routes/userRouter');
+const adminRouter = require('./routes/adminRoutes');
 app.use('/user', userRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/routes', getAllRoutes);
 app.get('/routes/:busId', getRouteByBus);

@@ -34,14 +34,15 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
       setIsLoading(true);
       try {
         const role = pendingRole || "student";
-        const success = await googleLogin(tokenResponse.access_token, role);
+        const result = await googleLogin(tokenResponse.access_token, role);
         
-        if (success) {
+        if (result.success) {
           toast({
             title: "Success",
             description: "Successfully authenticated with Google",
           });
-          navigate(role === "driver" ? "/driver-home" : "/home");
+          const serverRole = result.role || role;
+          navigate(serverRole === "admin" ? "/admin" : serverRole === "driver" ? "/driver-home" : "/home");
         } else {
           throw new Error("Google login failed on backend");
         }
@@ -86,12 +87,11 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
       }).parse({ email, password });
       
       const role = pendingRole || "student";
-      const success = await login(email, password, role);
-      if (success) {
+      const result = await login(email, password, role);
+      if (result.success) {
         toast({ title: "Login Successful", description: "Welcome back!" });
-        // The user's role from backend is now stored in auth context
-        // We check pendingRole first (from onboarding flow), but the actual role comes from backend
-        navigate(role === "driver" ? "/driver-home" : "/home");
+        const serverRole = result.role || role;
+        navigate(serverRole === "admin" ? "/admin" : serverRole === "driver" ? "/driver-home" : "/home");
       } else {
         toast({ title: "Login Failed", description: "Invalid email or password", variant: "destructive" });
       }

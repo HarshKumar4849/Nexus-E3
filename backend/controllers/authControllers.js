@@ -163,13 +163,10 @@ module.exports.sendOTP = async (req, res) => {
       // Email sent successfully — don't expose the OTP
       res.status(200).json({ success: true, message: "OTP sent to your email." });
     } else {
-      // Email failed (SMTP blocked) — return the OTP in response so frontend can show it
-      console.log(`[OTP] Email delivery failed for ${email}. OTP: ${otpCode}`);
-      res.status(200).json({
-        success: true,
-        message: "Email delivery failed. Your verification code is shown below.",
-        otp: otpCode,
-        emailFailed: true,
+      // Email failed
+      console.log(`[OTP] Email delivery failed for ${email}`);
+      res.status(500).json({
+        error: "Failed to send email. Please check your network or try again later."
       });
     }
   } catch (error) {

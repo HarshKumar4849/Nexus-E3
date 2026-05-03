@@ -18,9 +18,6 @@ const OTPVerification = () => {
   const [resendCount, setResendCount] = useState(3);
   const [showChangeEmail, setShowChangeEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
-  const [fallbackOtp, setFallbackOtp] = useState<string | null>(
-    (location.state as any)?.fallbackOtp || null
-  );
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -107,19 +104,10 @@ const OTPVerification = () => {
       setOtp(["", "", "", ""]);
       inputRefs.current[0]?.focus();
 
-      if (data.emailFailed && data.otp) {
-        setFallbackOtp(data.otp);
-        toast({
-          title: "New Code Generated",
-          description: "Email unavailable. Your new code is shown above.",
-        });
-      } else {
-        setFallbackOtp(null);
-        toast({
-          title: "OTP Resent",
-          description: "A new verification code has been sent to your email",
-        });
-      }
+      toast({
+        title: "OTP Resent",
+        description: "A new verification code has been sent to your email",
+      });
     } catch (err) {
       toast({ title: "Error", description: "Failed to resend OTP", variant: "destructive" });
     }
@@ -177,18 +165,9 @@ const OTPVerification = () => {
                 <h1 className="text-2xl font-bold text-foreground text-center mb-4">
                   Verification Code
                 </h1>
-                <p className="text-muted-foreground text-center mb-4">
-                  {fallbackOtp
-                    ? "Email delivery is unavailable on this network."
-                    : <>We have sent the verification code<br />to your Email address</>}
+                <p className="text-muted-foreground text-center mb-6">
+                  We have sent the verification code<br />to your Email address
                 </p>
-
-                {fallbackOtp && (
-                  <div className="bg-primary/10 border border-primary/30 rounded-2xl p-4 mb-6 text-center">
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Your Verification Code</p>
-                    <p className="text-3xl font-bold text-primary tracking-[0.5em] font-mono">{fallbackOtp}</p>
-                  </div>
-                )}
 
 <div className="flex flex-wrap justify-center gap-3 mb-8">
                 {otp.map((digit, index) => (
