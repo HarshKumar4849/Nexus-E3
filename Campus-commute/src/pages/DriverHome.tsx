@@ -17,61 +17,42 @@ const BusIcon = L.divIcon({
   iconAnchor: [20, 20]
 });
 
-const RoutingControl = ({ stops }: { stops: any[] }) => {
+// Direct polyline through all stop coordinates — always shows full route, no OSRM limits
+const RoutePolyline = ({ stops }: { stops: any[] }) => {
   const map = useMap();
-  const [routeFound, setRouteFound] = useState(false);
+  const positions: [number, number][] = stops.map((s: any) => [s.coordinates.lat, s.coordinates.lng]);
 
   useEffect(() => {
-    if (!map || !stops || stops.length < 2) return;
-    const waypoints = stops.map((s: any) => L.latLng(s.coordinates.lat, s.coordinates.lng));
+    if (!map || positions.length < 2) return;
+    const bounds = L.latLngBounds(positions);
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }, []);
 
-    const control = (L.Routing as any).control({
-      waypoints,
-      routeWhileDragging: false,
-      addWaypoints: false,
-      draggableWaypoints: false,
-      showAlternatives: false,
-      fitSelectedRoutes: true,
-      show: false,
-      createMarker: () => null, // Don't show default OSRM markers
-      lineOptions: {
-        styles: [{ color: '#0ea5e9', opacity: 0.85, weight: 6 }]
-      }
-    }).addTo(map);
-
-    control.on('routesfound', () => setRouteFound(true));
-    control.on('routingerror', () => {
-      console.warn('OSRM routing failed, using fallback polyline');
-      setRouteFound(false);
-    });
-
-    // Fit bounds to show all stops
-    const bounds = L.latLngBounds(waypoints);
-    map.fitBounds(bounds, { padding: [40, 40] });
-
-    return () => {
-      try { map.removeControl(control); } catch (e) {}
-    };
-  }, [map, stops]);
-
-  // Fallback: draw straight polyline between stops if OSRM fails
-  if (!routeFound && stops && stops.length >= 2) {
-    const positions: [number, number][] = stops.map((s: any) => [s.coordinates.lat, s.coordinates.lng]);
-    return <Polyline positions={positions} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.7, dashArray: '10, 10' }} />;
-  }
-
-  return null;
+  return (
+    <Polyline
+      positions={positions}
+      pathOptions={{ color: '#1e3a8a', weight: 5, opacity: 0.85 }}
+    />
+  );
 };
 
 const MapController = ({ coords }: { coords: { lat: number; lng: number } | null }) => {
   const map = useMap();
-
   useEffect(() => {
-    if (coords) {
-      map.setView([coords.lat, coords.lng], 13);
-    }
+    if (coords) { map.setView([coords.lat, coords.lng], map.getZoom(), { animate: true }); }
   }, [coords]);
+  return null;
+};
 
+// Fit map to show all stops on first load
+const FitBounds = ({ stops }: { stops: any[] }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (stops && stops.length >= 2) {
+      const bounds = L.latLngBounds(stops.map(s => [s.coordinates.lat, s.coordinates.lng]));
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }, []);
   return null;
 };
 
@@ -87,7 +68,10 @@ const DriverHome = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [socketReady, setSocketReady] = useState(false);
   const [broadcastCount, setBroadcastCount] = useState(0);
-  
+  // Road geometry points fetched from OSRM for accurate road-following simulation
+  const [roadPoints, setRoadPoints] = useState<[number,number][]>([]);
+  const [roadFetched, setRoadFetched] = useState(false);
+
   // Initialize socket connection + join bus room
   useEffect(() => {
     const newSocket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:8000", {
@@ -115,52 +99,67 @@ const DriverHome = () => {
     };
   }, [user?.routeNo]);
 
-  // Simulation Loop
+  // Fetch OSRM road geometry once when route is known
   useEffect(() => {
-    if (!isSimulating || !locationSharing || !dutyStatus || !socketReady || !socket || !user?.routeNo) return;
-    
     const assignedRoute = routes.find(r => r.busNumber === user?.routeNo);
     if (!assignedRoute || assignedRoute.stoppages.length < 2) return;
+    if (roadFetched) return;
 
-    let currentStopIdx = 0;
-    let progress = 0; // 0 to 1 between current and next stop
-    
-    console.log("[Driver] Starting GPS Simulation...");
+    const coords = assignedRoute.stoppages
+      .map(s => `${s.coordinates.lng},${s.coordinates.lat}`)
+      .join(';');
+
+    fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)
+      .then(r => r.json())
+      .then(data => {
+        const pts: [number,number][] = data.routes?.[0]?.geometry?.coordinates?.map(
+          ([lng, lat]: [number,number]) => [lat, lng] as [number,number]
+        ) ?? [];
+        if (pts.length > 0) {
+          setRoadPoints(pts);
+          console.log(`[Driver] OSRM road loaded: ${pts.length} points`);
+        }
+        setRoadFetched(true);
+      })
+      .catch(err => {
+        console.warn('[Driver] OSRM fetch failed, falling back to stop-to-stop:', err.message);
+        // Fallback: use stop coordinates directly
+        const fallback: [number,number][] = assignedRoute.stoppages.map(
+          s => [s.coordinates.lat, s.coordinates.lng]
+        );
+        setRoadPoints(fallback);
+        setRoadFetched(true);
+      });
+  }, [routes, user?.routeNo, roadFetched]);
+
+  // Road-following simulation — walks along real OSRM road geometry
+  useEffect(() => {
+    if (!isSimulating || !locationSharing || !dutyStatus || !socketReady || !socket || !user?.routeNo) return;
+    if (roadPoints.length < 2) {
+      console.warn('[Driver] Road points not ready yet...');
+      return;
+    }
+
+    let pointIdx = 0;
+    console.log(`[Driver] Starting road-following simulation along ${roadPoints.length} road points`);
 
     const simInterval = setInterval(() => {
-      if (currentStopIdx >= assignedRoute.stoppages.length - 1) {
-        // Reached the end, loop back or stop
-        currentStopIdx = 0;
-        progress = 0;
+      if (pointIdx >= roadPoints.length) {
+        pointIdx = 0; // loop the route
       }
+      const [lat, lng] = roadPoints[pointIdx];
+      pointIdx++;
 
-      const p1 = assignedRoute.stoppages[currentStopIdx].coordinates;
-      const p2 = assignedRoute.stoppages[currentStopIdx + 1].coordinates;
-      
-      progress += 0.05; // 5% per second (20 seconds between stops)
-      if (progress >= 1) {
-        progress = 0;
-        currentStopIdx++;
-      }
-
-      if (currentStopIdx < assignedRoute.stoppages.length - 1) {
-        const lat = p1.lat + (p2.lat - p1.lat) * progress;
-        const lng = p1.lng + (p2.lng - p1.lng) * progress;
-        
-        setCoords({ lat, lng });
-        socket.emit("driver-send-location", {
-          busId: String(user.routeNo),
-          lat, lng
-        });
-        setBroadcastCount(c => c + 1);
-      }
-    }, 1000);
+      setCoords({ lat, lng });
+      socket.emit('driver-send-location', { busId: String(user.routeNo), lat, lng });
+      setBroadcastCount(c => c + 1);
+    }, 800); // 800ms per point = smooth realistic road movement
 
     return () => {
-      console.log("[Driver] Stopping GPS Simulation");
+      console.log('[Driver] Stopping road-following simulation');
       clearInterval(simInterval);
     };
-  }, [isSimulating, locationSharing, dutyStatus, socketReady, socket, user?.routeNo, routes]);
+  }, [isSimulating, locationSharing, dutyStatus, socketReady, socket, user?.routeNo, roadPoints]);
 
   // GPS watching — only when locationSharing is ON and socket is ready (and NOT simulating)
   useEffect(() => {
@@ -225,55 +224,41 @@ const DriverHome = () => {
     {/* Map Section */}
     <div className="flex-1 relative">
       <style>{`
-        .live-bus-marker {
-          transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-        }
-        .leaflet-routing-alt {
-            display: none !important;
-        }
+        .live-bus-marker { transition: transform 1.5s cubic-bezier(0.2,0.8,0.2,1) !important; }
+        .leaflet-routing-alt { display: none !important; }
       `}</style>
-      
       {(() => {
         const assignedRoute = routes.find(r => r.busNumber === user?.routeNo);
-        const startPos: [number, number] = assignedRoute 
-          ? [assignedRoute.startPoint.coordinates.lat, assignedRoute.startPoint.coordinates.lng] 
-          : [13.0827, 80.2707];
-
+        const startPos: [number, number] = assignedRoute
+          ? [assignedRoute.startPoint.coordinates.lat, assignedRoute.startPoint.coordinates.lng]
+          : [20.4625, 85.8828];
+        const fallbackLine: [number, number][] = assignedRoute
+          ? assignedRoute.stoppages.map((s: any) => [s.coordinates.lat, s.coordinates.lng])
+          : [];
         return (
-          <MapContainer
-            center={startPos}
-            zoom={13}
-            zoomControl={false}
-            className="absolute inset-0 w-full h-full z-0"
-          >
+          <MapContainer center={startPos} zoom={12} zoomControl={true} className="absolute inset-0 w-full h-full z-0">
+            {assignedRoute && <FitBounds stops={assignedRoute.stoppages} />}
             <MapController coords={coords} />
-
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {assignedRoute && (
-               <RoutingControl stops={assignedRoute.stoppages} />
-            )}
-
-            {/* Stop markers along the route */}
-            {assignedRoute && assignedRoute.stoppages.map((stop, idx) => (
-              <CircleMarker
-                key={idx}
-                center={[stop.coordinates.lat, stop.coordinates.lng]}
-                radius={7}
-                pathOptions={{ color: '#1e40af', fillColor: '#3b82f6', fillOpacity: 0.9, weight: 2 }}
-              >
-                <Tooltip direction="top" offset={[0, -8]} permanent={false}>
-                  <span style={{ fontWeight: 600 }}>{idx + 1}. {stop.name}</span>
-                </Tooltip>
-              </CircleMarker>
-            ))}
-
+            <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {/* Full route line through all stops — always visible */}
+            {assignedRoute && <RoutePolyline stops={assignedRoute.stoppages} />}
+            {assignedRoute && assignedRoute.stoppages.map((stop: any, idx: number) => {
+              const isFirst = idx === 0;
+              const isLast  = idx === assignedRoute.stoppages.length - 1;
+              return (
+                <CircleMarker key={stop.name + idx} center={[stop.coordinates.lat, stop.coordinates.lng]}
+                  radius={isFirst || isLast ? 10 : 7}
+                  pathOptions={{ color: isFirst ? '#16a34a' : isLast ? '#dc2626' : '#1e40af', fillColor: isFirst ? '#22c55e' : isLast ? '#ef4444' : '#3b82f6', fillOpacity: 0.95, weight: 2.5 }}>
+                  <Tooltip direction="top" offset={[0, -10]}>
+                    <span style={{ fontWeight: 700 }}>{idx + 1}. {stop.name}</span>
+                    {stop.arrivalTime && <span style={{ color: '#6b7280', marginLeft: 6 }}>{stop.arrivalTime}</span>}
+                  </Tooltip>
+                </CircleMarker>
+              );
+            })}
             {coords && (
               <Marker position={[coords.lat, coords.lng]} icon={BusIcon}>
-                <Popup>Your live GPS location broadcast</Popup>
+                <Popup>🚌 Live — broadcasting to students</Popup>
               </Marker>
             )}
           </MapContainer>

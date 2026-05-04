@@ -12,12 +12,21 @@ const isAdmin = (req, res, next) => {
     }
 };
 
-// Admin Settings
+// ─── PUBLIC (no auth needed) ──────────────────────────────────────────────────
+// Drivers use this to verify their secret key before signup
+router.post('/verify-driver-key', adminController.verifyDriverKey);
+
+// ─── ADMIN SETTINGS ───────────────────────────────────────────────────────────
 router.get('/settings', isLoggedIn, adminController.getSettings);
 router.put('/settings', isLoggedIn, isAdmin, adminController.updateSettings);
 
-// Driver Management
+// ─── DRIVER MANAGEMENT ────────────────────────────────────────────────────────
 router.get('/drivers', isLoggedIn, isAdmin, adminController.getDrivers);
 router.put('/drivers/assign', isLoggedIn, isAdmin, adminController.updateDriverAssignment);
+
+// ─── USER MANAGEMENT ──────────────────────────────────────────────────────────
+router.get('/users', isLoggedIn, isAdmin, adminController.getAllUsers);
+router.put('/users/block', isLoggedIn, isAdmin, adminController.blockUser);
+router.delete('/users/:userId', isLoggedIn, isAdmin, adminController.deleteUser);
 
 module.exports = router;

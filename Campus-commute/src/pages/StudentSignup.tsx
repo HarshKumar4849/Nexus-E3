@@ -102,7 +102,8 @@ const StudentSignup = () => {
               Please provide the details below<br />to create your account
             </p>
 
-            <div className="space-y-4 mb-6">
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateAccount(); }}>
+              <div className="space-y-4 mb-6">
               <FormInput
                 placeholder="Full Name"
                 value={fullName}
@@ -150,9 +151,10 @@ const StudentSignup = () => {
               </span>
             </label>
 
-            <GradientButton onClick={handleCreateAccount}>
+            <GradientButton type="submit">
               Create Account
             </GradientButton>
+            </form>
           </div>
 
           <p className="text-center text-muted-foreground mt-8">

@@ -104,10 +104,7 @@ const OTPVerification = () => {
       setOtp(["", "", "", ""]);
       inputRefs.current[0]?.focus();
 
-      toast({
-        title: "OTP Resent",
-        description: "A new verification code has been sent to your email",
-      });
+      toast({ title: "OTP Resent", description: "New code sent to your email." });
     } catch (err) {
       toast({ title: "Error", description: "Failed to resend OTP", variant: "destructive" });
     }
@@ -165,9 +162,15 @@ const OTPVerification = () => {
                 <h1 className="text-2xl font-bold text-foreground text-center mb-4">
                   Verification Code
                 </h1>
-                <p className="text-muted-foreground text-center mb-6">
-                  We have sent the verification code<br />to your Email address
+                <p className="text-muted-foreground text-center mb-4">
+                  A verification code was sent to your email.
                 </p>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-8 mx-auto max-w-sm flex items-start gap-2 text-left">
+                  <span className="text-amber-500 text-lg leading-none">⚠️</span>
+                  <p className="text-xs text-amber-600/90 dark:text-amber-400/90">
+                    <strong>Not seeing the email?</strong> Please check your <strong>Spam</strong> or <strong>Junk</strong> folder.
+                  </p>
+                </div>
 
 <div className="flex flex-wrap justify-center gap-3 mb-8">
                 {otp.map((digit, index) => (

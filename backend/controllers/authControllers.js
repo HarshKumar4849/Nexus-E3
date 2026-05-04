@@ -29,6 +29,14 @@ module.exports.register = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ error: "User already exists" });
     }
+
+    // Ensure regdNo is unique (one per student)
+    if (assignedRole === 'student' && regdNo) {
+      const existingRegd = await userModel.findOne({ regdNo });
+      if (existingRegd) {
+        return res.status(400).json({ error: "This registration number is already in use" });
+      }
+    }
     
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -74,6 +82,11 @@ module.exports.login = async (req, res) => {
     let user = await userModel.findOne({ email });
     if (!user) {
       return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    // Check if user is blocked by admin
+    if (user.isBlocked) {
+      return res.status(403).json({ error: "Your account has been suspended. Please contact the administrator." });
     }
     
     // Comparing the password using async/await
@@ -123,6 +136,7 @@ module.exports.sendOTP = async (req, res) => {
 
     // Generate a real random 4-digit OTP every time
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    console.log(`\n=============================\nGENERATED OTP FOR ${email} : ${otpCode}\n=============================\n`);
 
     // Delete any existing OTP for this email
     await otpModel.deleteMany({ email });
@@ -130,43 +144,77 @@ module.exports.sendOTP = async (req, res) => {
     // Save the real OTP to the database
     await otpModel.create({ email, otp: otpCode });
 
-    // Attempt to send email with a 5-second hard timeout
+    // Gmail App Passwords have spaces — strip them
+    const rawPass = (process.env.EMAIL_PASS || "").replace(/\s/g, "");
+
+    // Try sending via both SMTP ports — 587 (STARTTLS) first, then 465 (SSL)
     let emailSent = false;
-    try {
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL,
-          pass: process.env.EMAIL_PASS,
-        },
-      });
+    let emailError = null;
 
-      const emailPromise = transporter.sendMail({
-        from: `"Campus Commute" <${process.env.EMAIL}>`,
-        to: email,
-        subject: "Verification Code for Campus Commute",
-        text: `Your verification code is: ${otpCode}. It will expire in 5 minutes.`,
-        html: `<p>Your verification code is: <b>${otpCode}</b>.</p><p>It will expire in 5 minutes.</p>`,
-      });
+    const transportConfigs = [
+      { host: 'smtp.gmail.com', port: 587, secure: false, name: 'STARTTLS-587' },
+      { host: 'smtp.gmail.com', port: 465, secure: true,  name: 'SSL-465' },
+    ];
 
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Email send timed out")), 5000)
-      );
+    for (const cfg of transportConfigs) {
+      if (emailSent) break;
+      try {
+        const transporter = nodemailer.createTransport({
+          host: cfg.host,
+          port: cfg.port,
+          secure: cfg.secure,
+          auth: { user: process.env.EMAIL, pass: rawPass },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000,
+        });
 
-      await Promise.race([emailPromise, timeoutPromise]);
-      emailSent = true;
-    } catch (emailError) {
-      console.warn("Email delivery failed:", emailError.message);
+        const emailPromise = transporter.sendMail({
+          from: `"Campus Commute" <${process.env.EMAIL}>`,
+          to: email,
+          subject: "Your Campus Commute Verification Code",
+          text: `Your verification code is: ${otpCode}. It expires in 5 minutes. Do not share this with anyone.`,
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px">
+              <h2 style="color:#0f766e;margin-bottom:8px">Campus Commute</h2>
+              <p style="color:#374151">Your email verification code is:</p>
+              <div style="background:#f0fdfa;border:2px solid #0f766e;border-radius:8px;padding:20px;text-align:center;margin:16px 0">
+                <span style="font-size:40px;font-weight:bold;letter-spacing:16px;color:#0f766e;font-family:monospace">${otpCode}</span>
+              </div>
+              <p style="color:#6b7280;font-size:13px">Expires in <strong>5 minutes</strong>. Do not share this code.</p>
+            </div>
+          `,
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timed out on ${cfg.name}`)), 12000)
+        );
+
+        await Promise.race([emailPromise, timeoutPromise]);
+        emailSent = true;
+        console.log(`[OTP] Email sent via ${cfg.name} to ${email}`);
+      } catch (err) {
+        emailError = err.message;
+        console.warn(`[OTP] ${cfg.name} failed:`, err.message);
+      }
     }
 
     if (emailSent) {
-      // Email sent successfully — don't expose the OTP
-      res.status(200).json({ success: true, message: "OTP sent to your email." });
+      return res.status(200).json({ success: true, message: "OTP sent to your email." });
     } else {
-      // Email failed
-      console.log(`[OTP] Email delivery failed for ${email}`);
-      res.status(500).json({
-        error: "Failed to send email. Please check your network or try again later."
+      // Network is blocking SMTP — return OTP as fallback so signup always works
+      const isNetworkBlock = emailError && (
+        emailError.includes("ETIMEOUT") || emailError.includes("ECONNREFUSED") ||
+        emailError.includes("ENOTFOUND") || emailError.includes("Timed out")
+      );
+      console.log(`[OTP FALLBACK] ${isNetworkBlock ? "Network blocked SMTP" : "Auth/send error"} for ${email}. Error: ${emailError}`);
+      return res.status(200).json({
+        success: true,
+        emailFailed: true,
+        otp: otpCode,
+        message: isNetworkBlock
+          ? "Email blocked by network. Use the code shown on screen."
+          : "Email delivery failed. Use the code shown on screen.",
       });
     }
   } catch (error) {
@@ -228,7 +276,7 @@ module.exports.googleLogin = async (req, res) => {
         password: hashedDummyPassword,
         profileImage: googleUser.picture,
         role: assignedRole,
-        routeNo: assignedRole === 'driver' ? 'CUTTACK-1-A' : undefined
+        routeNo: assignedRole === 'driver' ? 'UNASSIGNED' : undefined
       });
     }
 
@@ -251,5 +299,37 @@ module.exports.googleLogin = async (req, res) => {
   } catch (error) {
     console.error("Google Auth Error:", error);
     res.status(500).json({ error: "Failed to authenticate with Google" });
+  }
+};
+
+module.exports.deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const user = req.user; // from isLoggedIn middleware
+
+    if (!password) {
+      return res.status(400).json({ error: "Password is required to delete account" });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Incorrect password" });
+    }
+
+    // Delete user
+    await userModel.findByIdAndDelete(user._id);
+
+    // Clear session token
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+
+    res.status(200).json({ success: true, message: "Account deleted successfully" });
+  } catch (error) {
+    console.error("Delete Account Error:", error);
+    res.status(500).json({ error: "Failed to delete account" });
   }
 };

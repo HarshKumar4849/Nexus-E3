@@ -5,18 +5,19 @@
 ![Node.js](https://img.shields.io/badge/Node.js-Backend-green)
 ![Socket.io](https://img.shields.io/badge/Socket.io-Realtime-black)
 
-**Campus Commute** is a comprehensive, real-time bus tracking and transport management web application designed specifically for college campuses. It bridges the gap between drivers and students through a seamless, mobile-first platform, offering live telemetry, accurate ETAs, smart arrival alarms, and a built-in GPS simulation mode for easy testing.
+**Campus Commute** is a comprehensive, real-time bus tracking and transport management web application designed specifically for college campuses. It bridges the gap between drivers, students, and administrators through a seamless, mobile-first platform, offering live telemetry, accurate ETAs, smart arrival alarms, and a built-in GPS simulation mode for easy testing.
 
 ---
 
 ## ✨ Key Features
 
 * **📍 Real-Time GPS Tracking**: High-frequency bus location updates powered by WebSockets (Socket.io) and Leaflet maps.
+* **🗺️ Beautiful Road-Following Maps**: Integrated with the Open Source Routing Machine (OSRM) API to dynamically render curved map paths that perfectly hug physical roads, complete with interactive stop markers and rich tooltips.
 * **🎮 GPS Simulation Mode**: Drivers can instantly simulate their route directly from the dashboard, broadcasting a moving location to all students without physically driving. Perfect for demonstrations!
 * **⏰ Enhanced Arrival Alarms**: Stop missing the bus! Users can set a target stop and receive a **full-screen visual overlay, device vibration, and audio alarm** when the bus is approaching.
-* **👥 Dual Roles**: Dedicated onboarding flows and distinct dashboards tailored specifically for **Students** and **Drivers**.
+* **👥 Multi-Role Dashboards**: Dedicated onboarding flows and distinct dashboards tailored specifically for **Students**, **Drivers**, and **Administrators** (for managing routes, fleets, and users).
 * **💎 Premium UI/UX**: Clean, engaging, and card-based mobile-first layout leveraging TailwindCSS, Shadcn UI, and Lucide Icons.
-* **🔐 Robust Auth**: Supports custom JWT-based email/password authentication (with OTP verification) alongside Google OAuth integration.
+* **🔐 Robust Auth**: Supports custom JWT-based email/password authentication (with a robust OTP verification fallback system) alongside seamless **Google OAuth** integration.
 
 ---
 
@@ -42,15 +43,20 @@
 
 Want to jump right in and test the app? Use the pre-configured test accounts below:
 
-### 🎒 Student Account
-* **Email:** `student@test.edu`
+### 👑 Administrator Account
+* **Email:** `admin@test.edu`
 * **Password:** `Password123!`
-* **Capabilities:** Can view live tracking, set alarms, and see ETAs.
+* **Capabilities:** Access the master Admin Dashboard to oversee live fleet locations, manage routes, block/unblock users, and track system analytics.
 
 ### 🚌 Driver Account
 * **Email:** `driver@test.edu`
 * **Password:** `Password123!`
 * **Capabilities:** Can start trips, broadcast real GPS locations, and use the **GPS Simulation Mode**.
+
+### 🎒 Student Account
+* **Email:** `student@test.edu`
+* **Password:** `Password123!`
+* **Capabilities:** Can view live tracking, interact with map stops, set alarms, and see ETAs.
 
 > **💡 Pro Tip:** Open two browser windows—log in as the Driver in one and start the "Simulate Route" feature. Log in as the Student in the other window to watch the bus move live on the map!
 
@@ -83,4 +89,6 @@ npm run dev
 ```
 
 ### 3. Environment Variables
-Both directories contain `.env.example` files or require environment variable setup. See the respective READMEs in the subdirectories for detailed configuration instructions (e.g., MongoDB URI, Google Client ID, JWT Secret).
+Both directories contain `.env.example` files or require environment variable setup. Make sure to configure standard variables such as your `MONGODB_URI`, `JWT_SECRET`, and `GOOGLE_CLIENT_ID`. 
+
+*(Note: During local testing, if SMTP email delivery is blocked by your network for OTP generation, the system is designed to fallback and return the OTP directly to the frontend/terminal for seamless onboarding).*

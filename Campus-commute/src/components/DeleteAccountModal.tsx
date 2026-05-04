@@ -55,39 +55,30 @@ const DeleteAccountModal = ({ open, onOpenChange, onClose }: DeleteAccountModalP
     setIsDeleting(true);
 
     try {
-      const registeredAccounts = JSON.parse(
-        localStorage.getItem("campus-commute-accounts") || "[]"
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/users/delete-account`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          // Send credentials to include cookies
+          credentials: "include",
+          body: JSON.stringify({ password }),
+        }
       );
 
-      // We explicitly search the local storage array instead of checking the user Context password natively. 
-      // This is because the 'completeSignup' function omits password injection into Context during fresh signups.
-      const targetAccount = registeredAccounts.find(
-        (acc: any) => acc.email === user?.email
-      );
+      const data = await response.json();
 
-      if (!targetAccount || targetAccount.password !== password) {
+      if (!response.ok) {
         toast({
           title: "Error",
-          description: "Password is incorrect.",
+          description: data.error || "Failed to delete account.",
           variant: "destructive",
         });
         setIsDeleting(false);
         return;
       }
-
-      // Remove account from registered accounts
-      const updatedAccounts = registeredAccounts.filter(
-        (acc: any) => acc.email !== user?.email
-      );
-      localStorage.setItem(
-        "campus-commute-accounts",
-        JSON.stringify(updatedAccounts)
-      );
-
-      // Clear current authenticating session markers
-      localStorage.removeItem("currentUser");
-      localStorage.removeItem("studentData");
-      localStorage.removeItem("driverData");
 
       // Logout and redirect
       logout();

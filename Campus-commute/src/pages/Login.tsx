@@ -126,12 +126,14 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
               Please provide the details below to log in
             </p>
 
-            <div className="space-y-4 mb-6">
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+              <div className="space-y-4 mb-6">
               <FormInput
                 placeholder="Enter your Email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 error={errors.email}
               />
               <FormInput
@@ -140,6 +142,7 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 showPasswordToggle
+                autoComplete="current-password"
                 error={errors.password}
               />
             </div>
@@ -166,9 +169,10 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
               </Link>
             </div>
 
-            <GradientButton onClick={handleLogin} disabled={isLoading}>
+            <GradientButton type="submit" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Log In"}
             </GradientButton>
+            </form>
 
             <div className="flex items-center gap-4 my-6">
               <div className="flex-1 h-px bg-border" />

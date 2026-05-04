@@ -97,6 +97,18 @@ const DriverDashboard = () => {
                   Route {user?.routeNo || "1"}
                 </span>
               </div>
+
+              {/* Added Stats Section to fill visual gap */}
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="bg-primary/10 p-4 rounded-2xl border border-primary/20 flex flex-col items-center justify-center">
+                  <p className="text-3xl font-bold text-primary">12</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Stops Covered</p>
+                </div>
+                <div className="bg-primary/10 p-4 rounded-2xl border border-primary/20 flex flex-col items-center justify-center">
+                  <p className="text-3xl font-bold text-primary">45</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">Active Students</p>
+                </div>
+              </div>
             </div>
           </div>
 

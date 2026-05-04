@@ -1,10 +1,19 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Edit2, ChevronUp, ChevronDown, Save, Users, Settings } from "lucide-react";
+import { Plus, Trash2, Edit2, ChevronUp, ChevronDown, Save, Users, Settings, Shield, KeyRound, Bus, AlertTriangle, Ban, CheckCircle } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import FormInput from "@/components/FormInput";
 import GradientButton from "@/components/GradientButton";
 import BackButton from "@/components/BackButton";
 import { useToast } from "@/hooks/use-toast";
+
+const BACKEND = "http://localhost:8000";
+
+interface AdminSettings {
+  adminName: string;
+  adminPhone: string;
+  dutyInstructions: string;
+  driverSecretKey: string;
+}
 
 interface Route {
   id: string;
@@ -12,16 +21,6 @@ interface Route {
   stops: string[];
   timing: string;
   assignedBus?: string;
-  assignedDriver?: string;
-  conductorName?: string;
-  conductorPhone?: string;
-  eta?: number;
-}
-
-interface AdminSettings {
-  adminName: string;
-  adminPhone: string;
-  dutyInstructions: string;
 }
 
 interface Driver {
@@ -29,343 +28,409 @@ interface Driver {
   fullname: string;
   email: string;
   routeNo?: string;
-  phone?: string;
+  timing?: string;
 }
+
+interface AppUser {
+  _id: string;
+  fullname: string;
+  email: string;
+  role: string;
+  regdNo?: string;
+  isBlocked?: boolean;
+  createdAt?: string;
+}
+
+type Tab = "settings" | "routes" | "drivers" | "users";
 
 const AdminPanel = () => {
   const { toast } = useToast();
-  
-  // States
-  const [activeTab, setActiveTab] = useState<"settings" | "routes" | "drivers">("settings");
-  
-  // Settings State
-  const [adminSettings, setAdminSettings] = useState<AdminSettings>({
-    adminName: "", adminPhone: "", dutyInstructions: ""
+  const [activeTab, setActiveTab] = useState<Tab>("settings");
+
+  // Settings
+  const [settings, setSettings] = useState<AdminSettings>({
+    adminName: "", adminPhone: "", dutyInstructions: "", driverSecretKey: ""
   });
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-  
-  // Drivers State
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  
-  // Routes State
+  const [showKey, setShowKey] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Routes (local)
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [showAddRoute, setShowAddRoute] = useState(false);
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [editingRoute, setEditingRoute] = useState<string | null>(null);
+  const [showAddRoute, setShowAddRoute] = useState(false);
+  const [rNum, setRNum] = useState("");
+  const [rStops, setRStops] = useState("");
+  const [rTiming, setRTiming] = useState("");
+  const [rBus, setRBus] = useState("");
+  const [lastSavedRoute, setLastSavedRoute] = useState<string | null>(null);
 
-  // Form states for Routes
-  const [routeNumber, setRouteNumber] = useState("");
-  const [stops, setStops] = useState("");
-  const [timing, setTiming] = useState("");
-  const [assignedBus, setAssignedBus] = useState("");
-  const [assignedDriver, setAssignedDriver] = useState("");
-  const [conductorName, setConductorName] = useState("");
-  const [conductorPhone, setConductorPhone] = useState("");
-  const [eta, setEta] = useState("");
+  // Drivers
+  const [drivers, setDrivers] = useState<Driver[]>([]);
 
-  // Load Initial Data
+  // Users
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [userFilter, setUserFilter] = useState<"all" | "student" | "driver">("all");
+
   useEffect(() => {
     fetchSettings();
     fetchDrivers();
-    
-    const savedRoutes = localStorage.getItem("adminRoutes");
-    if (savedRoutes) {
-      try { setRoutes(JSON.parse(savedRoutes)); } catch { setRoutes([]); }
-    }
+    fetchUsers();
+    const saved = localStorage.getItem("adminRoutes");
+    if (saved) { try { setRoutes(JSON.parse(saved)); } catch { setRoutes([]); } }
   }, []);
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/admin/settings", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.settings) setAdminSettings(data.settings);
-      }
-    } catch (error) {
-      console.error("Failed to fetch settings", error);
-    }
+      const r = await fetch(`${BACKEND}/api/admin/settings`, { credentials: "include" });
+      if (r.ok) { const d = await r.json(); if (d.settings) setSettings(d.settings); }
+    } catch {}
   };
 
   const fetchDrivers = async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/admin/drivers", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.drivers) setDrivers(data.drivers);
-      }
-    } catch (error) {
-      console.error("Failed to fetch drivers", error);
-    }
+      const r = await fetch(`${BACKEND}/api/admin/drivers`, { credentials: "include" });
+      if (r.ok) { const d = await r.json(); if (d.drivers) setDrivers(d.drivers); }
+    } catch {}
   };
 
+  const fetchUsers = async () => {
+    try {
+      const r = await fetch(`${BACKEND}/api/admin/users`, { credentials: "include" });
+      if (r.ok) { const d = await r.json(); if (d.users) setUsers(d.users); }
+    } catch {}
+  };
+
+  // ─── SETTINGS ──────────────────────────────────────────────────────────────
   const handleSaveSettings = async () => {
-    setIsSavingSettings(true);
+    setIsSaving(true);
     try {
-      const res = await fetch("http://localhost:8000/api/admin/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(adminSettings)
+      const r = await fetch(`${BACKEND}/api/admin/settings`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify(settings),
       });
-      if (res.ok) {
-        toast({ title: "Success", description: "Admin settings updated successfully." });
-      } else {
-        throw new Error("Failed to update");
-      }
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to update admin settings.", variant: "destructive" });
-    } finally {
-      setIsSavingSettings(false);
-    }
+      if (r.ok) toast({ title: "Saved", description: "Global settings updated." });
+      else throw new Error();
+    } catch { toast({ title: "Error", description: "Failed to save.", variant: "destructive" }); }
+    finally { setIsSaving(false); }
   };
 
-  const handleUpdateDriverRoute = async (driverId: string, newRouteNo: string) => {
-    try {
-      const res = await fetch("http://localhost:8000/api/admin/drivers/assign", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ driverId, routeNo: newRouteNo })
-      });
-      if (res.ok) {
-        toast({ title: "Driver Assigned", description: `Driver assigned to Route ${newRouteNo}` });
-        fetchDrivers(); // Refresh list
-      }
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to assign driver.", variant: "destructive" });
-    }
-  };
-
-  // --- Routes Logic ---
-  const saveRoutes = (newRoutes: Route[]) => {
-    localStorage.setItem("adminRoutes", JSON.stringify(newRoutes));
-    setRoutes(newRoutes);
-  };
-
-  const handleAddRoute = () => {
-    if (!routeNumber.trim() || !stops.trim() || !timing.trim()) {
-      toast({ title: "Validation Error", description: "Please fill all required fields", variant: "destructive" });
-      return;
-    }
-    const newRoute: Route = {
-      id: Date.now().toString(),
-      number: routeNumber,
-      stops: stops.split(",").map((s) => s.trim()),
-      timing,
-      assignedBus: assignedBus || undefined,
-      assignedDriver: assignedDriver || undefined,
-      conductorName: conductorName || undefined,
-      conductorPhone: conductorPhone || undefined,
-      eta: eta ? parseInt(eta) : undefined,
-    };
-    saveRoutes([...routes, newRoute]);
-    resetRouteForm();
-    toast({ title: "Route Added", description: `Route ${routeNumber} has been added successfully` });
-  };
-
-  const handleEditRoute = (routeId: string) => {
-    const route = routes.find((r) => r.id === routeId);
-    if (route) {
-      setRouteNumber(route.number);
-      setStops(route.stops.join(", "));
-      setTiming(route.timing);
-      setAssignedBus(route.assignedBus || "");
-      setAssignedDriver(route.assignedDriver || "");
-      setConductorName(route.conductorName || "");
-      setConductorPhone(route.conductorPhone || "");
-      setEta(route.eta ? route.eta.toString() : "");
-      setEditingRoute(routeId);
-    }
-  };
-
-  const handleUpdateRoute = () => {
-    if (!routeNumber.trim() || !stops.trim() || !timing.trim()) {
-      toast({ title: "Validation Error", description: "Please fill all required fields", variant: "destructive" });
-      return;
-    }
-    const newRoutes = routes.map((r) => r.id === editingRoute ? {
-      ...r, number: routeNumber, stops: stops.split(",").map((s) => s.trim()), timing,
-      assignedBus: assignedBus || undefined, assignedDriver: assignedDriver || undefined,
-      conductorName: conductorName || undefined, conductorPhone: conductorPhone || undefined,
-      eta: eta ? parseInt(eta) : undefined,
-    } : r);
-    saveRoutes(newRoutes);
-    resetRouteForm();
-    toast({ title: "Route Updated", description: "Route has been updated successfully" });
-  };
-
-  const handleDeleteRoute = (routeId: string) => {
-    saveRoutes(routes.filter((r) => r.id !== routeId));
-    toast({ title: "Route Deleted", description: "Route has been deleted successfully" });
+  // ─── ROUTES ────────────────────────────────────────────────────────────────
+  const saveRoutes = (newR: Route[]) => {
+    localStorage.setItem("adminRoutes", JSON.stringify(newR));
+    setRoutes(newR);
   };
 
   const resetRouteForm = () => {
-    setShowAddRoute(false); setEditingRoute(null); setRouteNumber(""); setStops("");
-    setTiming(""); setAssignedBus(""); setAssignedDriver(""); setConductorName("");
-    setConductorPhone(""); setEta("");
+    setShowAddRoute(false); setEditingRoute(null);
+    setRNum(""); setRStops(""); setRTiming(""); setRBus("");
   };
+
+  const handleAddRoute = () => {
+    if (!rNum.trim() || !rStops.trim() || !rTiming.trim()) {
+      toast({ title: "Validation", description: "Fill Route No, Stops & Timing.", variant: "destructive" }); return;
+    }
+    const newRoute: Route = {
+      id: Date.now().toString(), number: rNum.trim(),
+      stops: rStops.split(",").map(s => s.trim()).filter(Boolean),
+      timing: rTiming.trim(), assignedBus: rBus.trim() || undefined,
+    };
+    const updated = [...routes, newRoute];
+    localStorage.setItem("adminRoutes", JSON.stringify(updated));
+    setRoutes(updated);
+    setLastSavedRoute(rNum.trim());
+    setTimeout(() => setLastSavedRoute(null), 4000);
+    // Close form and clear fields
+    setShowAddRoute(false); setEditingRoute(null);
+    setRNum(""); setRStops(""); setRTiming(""); setRBus("");
+    toast({ title: "✅ Route Added", description: `Route ${rNum} saved successfully.` });
+  };
+
+  const handleEditSave = () => {
+    if (!rNum.trim() || !rStops.trim() || !rTiming.trim()) {
+      toast({ title: "Validation", description: "Fill required fields.", variant: "destructive" }); return;
+    }
+    saveRoutes(routes.map(r => r.id === editingRoute ? {
+      ...r, number: rNum.trim(),
+      stops: rStops.split(",").map(s => s.trim()).filter(Boolean),
+      timing: rTiming.trim(), assignedBus: rBus.trim() || undefined,
+    } : r));
+    resetRouteForm();
+    toast({ title: "Route Updated" });
+  };
+
+  const handleEditRoute = (r: Route) => {
+    setRNum(r.number); setRStops(r.stops.join(", ")); setRTiming(r.timing); setRBus(r.assignedBus || "");
+    setEditingRoute(r.id); setShowAddRoute(false);
+  };
+
+  // ─── DRIVERS ───────────────────────────────────────────────────────────────
+  const handleAssignDriver = async (driverId: string, routeNo: string, timing: string) => {
+    try {
+      const r = await fetch(`${BACKEND}/api/admin/drivers/assign`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify({ driverId, routeNo, timing }),
+      });
+      if (r.ok) toast({ title: "Driver Updated" });
+    } catch { toast({ title: "Error", description: "Failed to assign.", variant: "destructive" }); }
+  };
+
+  // ─── USERS ─────────────────────────────────────────────────────────────────
+  const handleBlockUser = async (userId: string, block: boolean) => {
+    try {
+      const r = await fetch(`${BACKEND}/api/admin/users/block`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify({ userId, block }),
+      });
+      if (r.ok) {
+        setUsers(prev => prev.map(u => u._id === userId ? { ...u, isBlocked: block } : u));
+        toast({ title: block ? "User Blocked" : "User Unblocked" });
+      }
+    } catch { toast({ title: "Error", description: "Failed.", variant: "destructive" }); }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm("Permanently delete this user?")) return;
+    try {
+      const r = await fetch(`${BACKEND}/api/admin/users/${userId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (r.ok) {
+        setUsers(prev => prev.filter(u => u._id !== userId));
+        toast({ title: "User Deleted" });
+      }
+    } catch { toast({ title: "Error", description: "Failed.", variant: "destructive" }); }
+  };
+
+  const filteredUsers = userFilter === "all" ? users : users.filter(u => u.role === userFilter);
+
+  const tabs: { id: Tab; label: string; icon: any }[] = [
+    { id: "settings", label: "Global", icon: Settings },
+    { id: "routes", label: "Routes", icon: Bus },
+    { id: "drivers", label: "Drivers", icon: Shield },
+    { id: "users", label: "Users", icon: Users },
+  ];
 
   return (
     <MobileLayout>
-      <div className="flex flex-col min-h-screen px-4 sm:px-8 py-6">
+      <div className="flex flex-col min-h-screen px-4 sm:px-6 py-6">
         <BackButton to="/" />
-
         <div className="flex-1 pt-8">
-          <h1 className="text-2xl font-bold text-foreground text-center mb-6">Admin Panel</h1>
+          <h1 className="text-2xl font-bold text-foreground text-center mb-6">Admin Control Panel</h1>
 
-          {/* Navigation Tabs */}
-          <div className="flex gap-2 mb-6 bg-muted p-1 rounded-2xl">
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === "settings" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-            >
-              <Settings size={16} /> Global
-            </button>
-            <button
-              onClick={() => setActiveTab("drivers")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === "drivers" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-            >
-              <Users size={16} /> Drivers
-            </button>
-            <button
-              onClick={() => setActiveTab("routes")}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${activeTab === "routes" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-            >
-              <Plus size={16} /> Routes
-            </button>
+          {/* Tab Nav */}
+          <div className="flex gap-1 mb-6 bg-muted p-1 rounded-2xl">
+            {tabs.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors flex flex-col items-center gap-0.5 ${
+                  activeTab === tab.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Tab Content: Settings */}
+          {/* ─── SETTINGS TAB ─── */}
           {activeTab === "settings" && (
-            <div className="bg-muted rounded-2xl p-6 mb-8 space-y-4">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Global Admin Settings</h2>
-              <FormInput 
-                label="Admin Name (Displayed to Drivers)" 
-                value={adminSettings.adminName} 
-                onChange={(e) => setAdminSettings({...adminSettings, adminName: e.target.value})} 
-              />
-              <FormInput 
-                label="Admin Phone Number" 
-                value={adminSettings.adminPhone} 
-                onChange={(e) => setAdminSettings({...adminSettings, adminPhone: e.target.value})} 
-              />
-              <div>
-                <label className="block text-sm text-muted-foreground mb-2">Global Duty Instructions</label>
-                <textarea
-                  value={adminSettings.dutyInstructions}
-                  onChange={(e) => setAdminSettings({...adminSettings, dutyInstructions: e.target.value})}
-                  className="w-full bg-background border-2 border-muted rounded-2xl p-3 text-foreground focus:border-primary focus:outline-none"
-                  rows={4}
-                />
+            <div className="space-y-4">
+              <div className="bg-muted rounded-2xl p-5 space-y-4">
+                <h2 className="font-semibold text-foreground flex items-center gap-2"><Settings className="w-4 h-4 text-primary" />Global Settings</h2>
+                <FormInput label="Admin Name" value={settings.adminName} onChange={e => setSettings({ ...settings, adminName: e.target.value })} />
+                <FormInput label="Admin Phone" value={settings.adminPhone} onChange={e => setSettings({ ...settings, adminPhone: e.target.value })} />
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-2">Duty Instructions</label>
+                  <textarea value={settings.dutyInstructions}
+                    onChange={e => setSettings({ ...settings, dutyInstructions: e.target.value })}
+                    className="w-full bg-background border-2 border-muted rounded-2xl p-3 text-foreground focus:border-primary focus:outline-none" rows={3} />
+                </div>
               </div>
-              <GradientButton onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full mt-4">
-                <Save size={18} className="mr-2 inline" /> {isSavingSettings ? "Saving..." : "Save Global Settings"}
+
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3">
+                <h2 className="font-semibold text-foreground flex items-center gap-2"><KeyRound className="w-4 h-4 text-amber-500" />Driver Secret Key</h2>
+                <p className="text-xs text-muted-foreground">Only drivers who know this key can sign up. Share it privately.</p>
+                <div className="relative">
+                  <input type={showKey ? "text" : "password"} value={settings.driverSecretKey}
+                    onChange={e => setSettings({ ...settings, driverSecretKey: e.target.value })}
+                    className="w-full bg-background border-2 border-muted rounded-2xl p-3 pr-16 text-foreground font-mono focus:border-amber-500 focus:outline-none"
+                    placeholder="e.g. DRIVER2024"
+                  />
+                  <button onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground px-2 py-1 bg-muted rounded-lg">
+                    {showKey ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              <GradientButton onClick={handleSaveSettings} disabled={isSaving} className="w-full">
+                <Save className="w-4 h-4 mr-2 inline" /> {isSaving ? "Saving..." : "Save All Settings"}
               </GradientButton>
             </div>
           )}
 
-          {/* Tab Content: Drivers */}
-          {activeTab === "drivers" && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Manage Drivers ({drivers.length})</h2>
-              {drivers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No drivers found.</div>
-              ) : (
-                drivers.map(driver => (
-                  <div key={driver._id} className="bg-muted rounded-2xl p-4 flex flex-col gap-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{driver.fullname}</p>
-                      <p className="text-sm text-muted-foreground">{driver.email}</p>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Assign Route No.</label>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text"
-                          defaultValue={driver.routeNo || ""}
-                          placeholder="e.g. CUTTACK-1-A"
-                          className="flex-1 bg-background border-2 border-muted rounded-xl px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-                          onBlur={(e) => {
-                            if (e.target.value !== driver.routeNo) {
-                              handleUpdateDriverRoute(driver._id, e.target.value);
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* Tab Content: Routes */}
+          {/* ─── ROUTES TAB ─── */}
           {activeTab === "routes" && (
-            <div className="space-y-4">
-              {!showAddRoute && editingRoute === null && (
+            <div className="space-y-3">
+              {/* Success badge after adding a route */}
+              {lastSavedRoute && (
+                <div className="flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/40 rounded-2xl px-4 py-3 text-sm text-emerald-600 font-medium">
+                  <CheckCircle className="w-4 h-4" />
+                  Route "{lastSavedRoute}" saved successfully!
+                </div>
+              )}
+
+              {!showAddRoute && !editingRoute && (
                 <button
-                  onClick={() => setShowAddRoute(true)}
-                  className="w-full mb-6 py-3 px-4 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center gap-2 hover:opacity-90 transition-opacity font-medium"
+                  type="button"
+                  onClick={() => {
+                    setRNum(""); setRStops(""); setRTiming(""); setRBus("");
+                    setEditingRoute(null);
+                    setShowAddRoute(true);
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center gap-2 hover:opacity-90 font-medium mb-4"
                 >
-                  <Plus size={20} /> Add New Route
+                  <Plus className="w-5 h-5" /> Add New Route
                 </button>
               )}
 
               {(showAddRoute || editingRoute) && (
-                <div className="bg-muted rounded-2xl p-6 mb-8">
-                  <h2 className="text-lg font-semibold text-foreground mb-4">
-                    {editingRoute ? "Edit Route" : "Add New Route"}
-                  </h2>
-                  <div className="space-y-4">
-                    <FormInput label="Route Number" placeholder="e.g., Route 5" value={routeNumber} onChange={(e) => setRouteNumber(e.target.value)} />
-                    <div>
-                      <label className="block text-sm text-muted-foreground mb-2">Stops (comma-separated)</label>
-                      <textarea placeholder="e.g., Stop A, Stop B, Stop C" value={stops} onChange={(e) => setStops(e.target.value)} className="w-full bg-background border-2 border-muted rounded-2xl p-3 text-foreground focus:border-primary focus:outline-none" rows={3} />
-                    </div>
-                    <FormInput label="Timing" placeholder="e.g., 06:00 AM" value={timing} onChange={(e) => setTiming(e.target.value)} />
-                    <FormInput label="ETA (minutes, Optional)" type="number" placeholder="e.g., 15" value={eta} onChange={(e) => setEta(e.target.value)} />
-                    <div className="flex gap-2 pt-4">
-                      <GradientButton onClick={editingRoute ? handleUpdateRoute : handleAddRoute} className="flex-1">
-                        {editingRoute ? "Update" : "Add"} Route
-                      </GradientButton>
-                      <button onClick={resetRouteForm} className="flex-1 py-3 px-4 border-2 border-foreground/20 rounded-2xl text-foreground font-medium hover:bg-muted transition-colors">Cancel</button>
-                    </div>
+                <div className="bg-muted rounded-2xl p-5 mb-4 space-y-3">
+                  <h2 className="font-semibold text-foreground">{editingRoute ? "Edit Route" : "Add New Route"}</h2>
+                  <FormInput label="Route Number *" placeholder="e.g. CUTTACK-1-A" value={rNum} onChange={e => setRNum(e.target.value)} />
+                  <div>
+                    <label className="block text-sm text-muted-foreground mb-1">Stops (comma-separated) *</label>
+                    <textarea value={rStops} onChange={e => setRStops(e.target.value)} rows={3} placeholder="Stop A, Stop B, Stop C"
+                      className="w-full bg-background border-2 border-muted rounded-2xl p-3 text-foreground focus:border-primary focus:outline-none" />
+                  </div>
+                  <FormInput label="Departure Timing *" placeholder="e.g. 06:30 AM" value={rTiming} onChange={e => setRTiming(e.target.value)} />
+                  <FormInput label="Assigned Bus No." placeholder="e.g. OD-01-AB-1234" value={rBus} onChange={e => setRBus(e.target.value)} />
+                  <div className="flex gap-2 pt-2">
+                    <GradientButton onClick={editingRoute ? handleEditSave : handleAddRoute} className="flex-1">
+                      {editingRoute ? "Update Route" : "Add Route"}
+                    </GradientButton>
+                    <button onClick={resetRouteForm} className="flex-1 py-3 px-4 border-2 border-foreground/20 rounded-2xl text-foreground font-medium hover:bg-muted">Cancel</button>
                   </div>
                 </div>
               )}
 
-              {/* Routes List */}
               {routes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No routes added yet.</div>
-              ) : (
-                routes.map((route) => (
-                  <div key={route.id} className="bg-muted rounded-2xl overflow-hidden mb-3">
-                    <button onClick={() => setExpandedRoute(expandedRoute === route.id ? null : route.id)} className="w-full p-4 flex items-center justify-between hover:bg-background/50 transition-colors">
-                      <div className="text-left flex-1">
-                        <p className="font-semibold text-foreground">{route.number}</p>
-                        <p className="text-sm text-muted-foreground">{route.timing}</p>
+                <div className="text-center py-12 text-muted-foreground">No routes added yet. Click "Add New Route" to start.</div>
+              ) : routes.map(route => (
+                <div key={route.id} className="bg-muted rounded-2xl overflow-hidden">
+                  <button onClick={() => setExpandedRoute(expandedRoute === route.id ? null : route.id)}
+                    className="w-full p-4 flex items-center justify-between hover:bg-background/50">
+                    <div className="text-left">
+                      <p className="font-semibold text-foreground">{route.number}</p>
+                      <p className="text-sm text-muted-foreground">{route.timing} {route.assignedBus && `· ${route.assignedBus}`}</p>
+                    </div>
+                    {expandedRoute === route.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {expandedRoute === route.id && (
+                    <div className="px-4 pb-4 border-t border-background pt-3 space-y-2">
+                      <p className="text-sm text-muted-foreground">Stops: <span className="text-foreground">{route.stops.join(" → ")}</span></p>
+                      <div className="flex gap-2 pt-2">
+                        <button onClick={() => handleEditRoute(route)} className="flex-1 py-2 rounded-xl bg-primary/20 text-primary flex items-center justify-center gap-1 hover:bg-primary/30 text-sm">
+                          <Edit2 className="w-4 h-4" /> Edit
+                        </button>
+                        <button onClick={() => saveRoutes(routes.filter(r => r.id !== route.id))} className="flex-1 py-2 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center gap-1 hover:bg-destructive/30 text-sm">
+                          <Trash2 className="w-4 h-4" /> Delete
+                        </button>
                       </div>
-                      {expandedRoute === route.id ? <ChevronUp className="text-muted-foreground" /> : <ChevronDown className="text-muted-foreground" />}
-                    </button>
-                    {expandedRoute === route.id && (
-                      <div className="px-4 pb-4 space-y-3 border-t border-background pt-3">
-                        <p className="text-sm text-muted-foreground">Stops: <span className="text-foreground">{route.stops.join(" → ")}</span></p>
-                        {route.eta && <p className="text-sm text-muted-foreground">ETA: <span className="text-foreground">{route.eta} min</span></p>}
-                        <div className="flex gap-2 pt-2">
-                          <button onClick={() => handleEditRoute(route.id)} className="flex-1 py-2 px-3 rounded-xl bg-primary/20 text-primary flex items-center justify-center gap-2 hover:bg-primary/30"><Edit2 size={16} /> Edit</button>
-                          <button onClick={() => handleDeleteRoute(route.id)} className="flex-1 py-2 px-3 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center gap-2 hover:bg-destructive/30"><Trash2 size={16} /> Delete</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
+          {/* ─── DRIVERS TAB ─── */}
+          {activeTab === "drivers" && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground mb-2">Assign routes and timings to each driver. Changes save instantly.</p>
+              {drivers.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No drivers registered yet.</div>
+              ) : drivers.map(driver => (
+                <DriverCard key={driver._id} driver={driver} onSave={handleAssignDriver} />
+              ))}
+            </div>
+          )}
+
+          {/* ─── USERS TAB ─── */}
+          {activeTab === "users" && (
+            <div className="space-y-3">
+              <div className="flex gap-2 mb-3">
+                {(["all", "student", "driver"] as const).map(f => (
+                  <button key={f} onClick={() => setUserFilter(f)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors capitalize ${
+                      userFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    }`}>{f}</button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{filteredUsers.length} user(s) found</p>
+              {filteredUsers.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">No users found.</div>
+              ) : filteredUsers.map(u => (
+                <div key={u._id} className={`bg-muted rounded-2xl p-4 border ${u.isBlocked ? "border-destructive/40" : "border-transparent"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground truncate">{u.fullname}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          u.role === "driver" ? "bg-blue-500/20 text-blue-500" : "bg-green-500/20 text-green-600"
+                        }`}>{u.role}</span>
+                        {u.regdNo && <span className="text-[10px] px-2 py-0.5 bg-muted-foreground/20 text-muted-foreground rounded-full">Regd: {u.regdNo}</span>}
+                        {u.isBlocked && <span className="text-[10px] px-2 py-0.5 bg-destructive/20 text-destructive rounded-full flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Blocked</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      <button onClick={() => handleBlockUser(u._id, !u.isBlocked)}
+                        className={`p-2 rounded-xl ${u.isBlocked ? "bg-green-500/20 text-green-500 hover:bg-green-500/30" : "bg-amber-500/20 text-amber-500 hover:bg-amber-500/30"}`}>
+                        {u.isBlocked ? <CheckCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => handleDeleteUser(u._id)} className="p-2 rounded-xl bg-destructive/20 text-destructive hover:bg-destructive/30">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </MobileLayout>
+  );
+};
+
+// ─── Inline Driver Card Component ─────────────────────────────────────────────
+const DriverCard = ({ driver, onSave }: { driver: Driver; onSave: (id: string, route: string, timing: string) => void }) => {
+  const [routeNo, setRouteNo] = useState(driver.routeNo || "");
+  const [timing, setTiming] = useState(driver.timing || "");
+  return (
+    <div className="bg-muted rounded-2xl p-4 space-y-3">
+      <div>
+        <p className="font-semibold text-foreground">{driver.fullname}</p>
+        <p className="text-xs text-muted-foreground">{driver.email}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Route No.</label>
+          <input value={routeNo} onChange={e => setRouteNo(e.target.value)} placeholder="e.g. CUTTACK-1-A"
+            className="w-full bg-background border-2 border-muted rounded-xl px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Timing</label>
+          <input value={timing} onChange={e => setTiming(e.target.value)} placeholder="06:30 AM"
+            className="w-full bg-background border-2 border-muted rounded-xl px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none" />
+        </div>
+      </div>
+      <button onClick={() => onSave(driver._id, routeNo, timing)}
+        className="w-full py-2 bg-primary/20 text-primary rounded-xl text-sm font-medium hover:bg-primary/30 flex items-center justify-center gap-2">
+        <Save className="w-4 h-4" /> Save Assignment
+      </button>
+    </div>
   );
 };
 

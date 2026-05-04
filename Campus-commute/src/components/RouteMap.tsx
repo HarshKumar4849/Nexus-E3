@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, CircleMarker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine';
@@ -37,66 +37,74 @@ const BusIcon = L.divIcon({
   iconAnchor: [20, 20]
 });
 
-const RoutingControl = ({ stops, setIsRouteBusy }: { stops: any[], setIsRouteBusy: (b: boolean) => void }) => {
+// Shows full route as solid dark blue line, snapping to real roads using OSRM
+const RoutePolyline = ({ stops }: { stops: any[] }) => {
   const map = useMap();
+  const [roadPoints, setRoadPoints] = useState<[number, number][]>([]);
 
   useEffect(() => {
-    if (!map || !stops || stops.length < 2) return;
+    if (stops.length < 2) return;
 
-    const waypoints = stops.map((s: any) => L.latLng(s.coordinates.lat, s.coordinates.lng));
+    const coordsString = stops
+      .map(s => `${s.coordinates.lng},${s.coordinates.lat}`)
+      .join(';');
 
-    const control = L.Routing.control({
-      waypoints,
-      routeWhileDragging: false,
-      addWaypoints: false,
-      draggableWaypoints: false,
-      showAlternatives: true,
-      fitSelectedRoutes: true,
-      show: false,
-      lineOptions: {
-        styles: [{ color: '#0ea5e9', opacity: 1, weight: 6 }]
-      },
-      altLineOptions: {
-        styles: [{ color: '#9ca3af', opacity: 0.8, weight: 5 }]
-      }
-    }).addTo(map);
+    fetch(`https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`)
+      .then(r => r.json())
+      .then(data => {
+        const pts: [number, number][] = data.routes?.[0]?.geometry?.coordinates?.map(
+          ([lng, lat]: [number, number]) => [lat, lng] as [number, number]
+        ) ?? [];
+        
+        if (pts.length > 0) {
+          setRoadPoints(pts);
+          const bounds = L.latLngBounds(pts);
+          map.fitBounds(bounds, { padding: [50, 50] });
+        } else {
+          const fallback: [number, number][] = stops.map(s => [s.coordinates.lat, s.coordinates.lng]);
+          setRoadPoints(fallback);
+          map.fitBounds(L.latLngBounds(fallback), { padding: [50, 50] });
+        }
+      })
+      .catch(err => {
+        console.warn('OSRM fetch failed, falling back to straight lines:', err.message);
+        const fallback: [number, number][] = stops.map(s => [s.coordinates.lat, s.coordinates.lng]);
+        setRoadPoints(fallback);
+        map.fitBounds(L.latLngBounds(fallback), { padding: [50, 50] });
+      });
+  }, [stops, map]);
 
-    control.on('routesfound', function(e: any) {
-      if (e.routes && e.routes.length > 1) {
-        setIsRouteBusy(true);
-      } else {
-        setIsRouteBusy(false);
-      }
-    });
+  if (roadPoints.length === 0) return null;
 
-    return () => {
-      try {
-        map.removeControl(control);
-      } catch (e) {}
-    };
-  }, [map, stops, setIsRouteBusy]);
-
-  return null;
+  return <Polyline positions={roadPoints} pathOptions={{ color: '#1e3a8a', weight: 6, opacity: 0.85 }} />;
 };
 
 // Recenter on live bus position when it changes
 const LiveRecenter = ({ position }: { position: [number, number] | null }) => {
   const map = useMap();
   useEffect(() => {
-    if (position) {
-      map.setView(position, map.getZoom(), { animate: true, duration: 1.5 });
-    }
+    if (position) map.setView(position, map.getZoom(), { animate: true, duration: 1.5 });
   }, [position, map]);
+
+  // Also listen for the manual 'Track Bus' button event
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        map.setView(e.detail as [number, number], 16, { animate: true, duration: 1 });
+      }
+    };
+    window.addEventListener('recenter-on-bus', handler);
+    return () => window.removeEventListener('recenter-on-bus', handler);
+  }, [map]);
+
   return null;
 };
 
 const RouteMap: React.FC<any> = () => {
-  // FIX #3: Use liveBusPosition from shared context — NO local socket
   const { selectedRoute, liveBusPosition } = useRouteContext();
   const { toast } = useToast();
-  
   const [visitedStops, setVisitedStops] = useState<Set<string>>(new Set());
-  const [isRouteBusy, setIsRouteBusy] = useState(false);
+  const isRouteBusy = false; // Added to fix ReferenceError
 
   if (!selectedRoute || !selectedRoute.stoppages || selectedRoute.stoppages.length === 0) {
     return <div className="w-full h-full min-h-[50vh] flex items-center justify-center bg-slate-100 text-slate-500 font-medium">Loading Routes...</div>;
@@ -191,12 +199,47 @@ const RouteMap: React.FC<any> = () => {
         {/* Recenter on live bus when tracking */}
         {liveBusPosition && <LiveRecenter position={liveBusPosition} />}
 
-        {/* Road Snapped Routing Machine */}
-        <RoutingControl stops={selectedRoute.stoppages} setIsRouteBusy={setIsRouteBusy} />
+        {/* Full route line — always visible, dark blue */}
+        <RoutePolyline stops={selectedRoute.stoppages} />
+
+        {/* Render all intermediate stops */}
+        {selectedRoute.stoppages.map((stop: any, idx: number) => {
+          const isFirst = idx === 0;
+          const isLast = idx === selectedRoute.stoppages.length - 1;
+          
+          // Skip first and last as they have their own big markers below
+          if (isFirst || isLast) return null;
+
+          return (
+            <CircleMarker 
+              key={stop.name + idx} 
+              center={[stop.coordinates.lat, stop.coordinates.lng]}
+              radius={7}
+              pathOptions={{ color: '#1e40af', fillColor: '#3b82f6', fillOpacity: 0.95, weight: 2.5 }}
+            >
+              <Tooltip direction="top" offset={[0, -10]}>
+                <span style={{ fontWeight: 700 }}>{idx + 1}. {stop.name}</span>
+                {stop.arrivalTime && <span style={{ color: '#6b7280', marginLeft: 6 }}> - {stop.arrivalTime}</span>}
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
 
         {/* Start / End Nodes */}
-        {startPoint && <Marker position={startPoint} icon={StartIcon} />}
-        {endPoint && <Marker position={endPoint} icon={EndIcon} />}
+        {startPoint && (
+          <Marker position={startPoint} icon={StartIcon}>
+            <Tooltip direction="top" offset={[0, -10]} permanent>
+              <span style={{ fontWeight: 700 }}>1. {selectedRoute.stoppages[0].name}</span>
+            </Tooltip>
+          </Marker>
+        )}
+        {endPoint && (
+          <Marker position={endPoint} icon={EndIcon}>
+            <Tooltip direction="top" offset={[0, -10]} permanent>
+              <span style={{ fontWeight: 700 }}>{selectedRoute.stoppages.length}. {selectedRoute.stoppages[selectedRoute.stoppages.length - 1].name}</span>
+            </Tooltip>
+          </Marker>
+        )}
         
         {/* Live Bus Marker — only shown when driver is broadcasting */}
         {liveBusPosition && (
