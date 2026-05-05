@@ -10,10 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useGoogleLogin } from "@react-oauth/google";
 
-const emailSchema = z.string().email("Invalid email address").refine((email) => {
-  const domain = email.split("@")[1];
-  return domain?.endsWith("gmail.com") || domain?.endsWith(".ac.in") || domain?.endsWith(".edu");
-}, "Only gmail.com, .ac.in, or .edu emails allowed");
+const emailSchema = z.string().email("Invalid email address");
 
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters");
 
@@ -34,14 +31,15 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
       setIsLoading(true);
       try {
         const role = pendingRole || "student";
-        const success = await googleLogin(tokenResponse.access_token, role);
+        const result = await googleLogin(tokenResponse.access_token, role);
         
-        if (success) {
+        if (result.success) {
           toast({
             title: "Success",
             description: "Successfully authenticated with Google",
           });
-          navigate(role === "driver" ? "/driver-home" : "/home");
+          const serverRole = result.role || role;
+          navigate(serverRole === "admin" ? "/admin" : serverRole === "driver" ? "/driver-home" : "/home");
         } else {
           throw new Error("Google login failed on backend");
         }
@@ -80,22 +78,26 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
     setErrors({});
     setIsLoading(true);
     try {
-      emailSchema.parse(email);
-      passwordSchema.parse(password);
+      z.object({
+        email: emailSchema,
+        password: passwordSchema
+      }).parse({ email, password });
+      
       const role = pendingRole || "student";
-      const success = await login(email, password, role);
-      if (success) {
+      const result = await login(email, password, role);
+      if (result.success) {
         toast({ title: "Login Successful", description: "Welcome back!" });
-        // The user's role from backend is now stored in auth context
-        // We check pendingRole first (from onboarding flow), but the actual role comes from backend
-        navigate(role === "driver" ? "/driver-home" : "/home");
+        const serverRole = result.role || role;
+        navigate(serverRole === "admin" ? "/admin" : serverRole === "driver" ? "/driver-home" : "/home");
       } else {
         toast({ title: "Login Failed", description: "Invalid email or password", variant: "destructive" });
       }
     } catch (err: any) {
       if (err instanceof z.ZodError) {
         const newErrors: any = {};
-        err.errors.forEach((e) => { if (e.path[0]) newErrors[e.path[0]] = e.message; });
+        err.errors.forEach((e) => { 
+          if (e.path[0]) newErrors[e.path[0]] = e.message; 
+        });
         setErrors(newErrors);
       } else {
         toast({
@@ -121,12 +123,14 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
               Please provide the details below to log in
             </p>
 
-            <div className="space-y-4 mb-6">
+            <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+              <div className="space-y-4 mb-6">
               <FormInput
                 placeholder="Enter your Email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 error={errors.email}
               />
               <FormInput
@@ -135,6 +139,7 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 showPasswordToggle
+                autoComplete="current-password"
                 error={errors.password}
               />
             </div>
@@ -161,9 +166,10 @@ const passwordSchema = z.string().min(8, "Password must be at least 8 characters
               </Link>
             </div>
 
-            <GradientButton onClick={handleLogin} disabled={isLoading}>
+            <GradientButton type="submit" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Log In"}
             </GradientButton>
+            </form>
 
             <div className="flex items-center gap-4 my-6">
               <div className="flex-1 h-px bg-border" />

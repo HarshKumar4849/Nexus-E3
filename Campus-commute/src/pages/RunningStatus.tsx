@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bus, MapPin, Clock, Navigation, Bell, BellRing, Gauge,
-  Circle, CheckCircle2, Radio, Timer, Route as RouteIcon, Wifi, WifiOff
+  Circle, CheckCircle2, Radio, Timer, Route as RouteIcon, Wifi, WifiOff, AlertTriangle
 } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import AuthCard from "@/components/AuthCard";
@@ -27,6 +27,10 @@ const RunningStatus = () => {
   const [alarmFired, setAlarmFired] = useState(false);
   const [showAlarmModal, setShowAlarmModal] = useState(false);
   const [alarmStopName, setAlarmStopName] = useState<string>("");
+  const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false); // FIXED: BUG 5
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const vibrateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Elapsed time counter
   const [elapsed, setElapsed] = useState("");
@@ -88,6 +92,27 @@ const RunningStatus = () => {
 
     if (selectedStopETA <= alarmMinutes) {
       setAlarmFired(true);
+      setIsAlarmRinging(true);
+      
+      // FIXED: Mobile Audio/Vibration Alarm (BUG 5)
+      // Start audio only if unlocked
+      if (audioUnlocked && audioRef.current) {
+        audioRef.current.play().catch(e => console.log("Audio play failed:", e));
+      } else if (!audioRef.current) {
+        // Fallback try
+        audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+        audioRef.current.loop = true;
+        audioRef.current.play().catch(e => console.log("Audio play failed:", e));
+      }
+
+      // Start vibration
+      if ("vibrate" in navigator) {
+        navigator.vibrate([500, 500, 500]);
+        vibrateIntervalRef.current = setInterval(() => {
+          navigator.vibrate([500, 500, 500]);
+        }, 2000);
+      }
+
       // Browser notification
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification(`🔔 Bus approaching ${alarmStopName}`, {
@@ -95,12 +120,29 @@ const RunningStatus = () => {
           icon: "/favicon.ico",
         });
       }
-      toast({
-        title: "🔔 Arrival Alert!",
-        description: `Bus arriving at ${alarmStopName} in ~${selectedStopETA} min`,
-      });
     }
   }, [alarmEnabled, alarmFired, selectedStopETA, alarmMinutes, alarmStopName, tripStatus?.visitedStops, toast]);
+
+  const stopAlarm = useCallback(() => {
+    setIsAlarmRinging(false);
+    setAlarmEnabled(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (vibrateIntervalRef.current) {
+      clearInterval(vibrateIntervalRef.current);
+    }
+    if ("vibrate" in navigator) {
+      navigator.vibrate(0);
+    }
+  }, []);
+
+  // FIXED: Alarm Persist Fix on Logout (BONUS 3)
+  useEffect(() => {
+    window.addEventListener("clear-alarm", stopAlarm);
+    return () => window.removeEventListener("clear-alarm", stopAlarm);
+  }, [stopAlarm]);
 
   // Request notification permission on alarm enable
   const enableAlarm = useCallback(() => {
@@ -111,6 +153,21 @@ const RunningStatus = () => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
+    
+    // FIXED: Mobile Audio/Vibration Alarm (BUG 5)
+    // Unlock Audio Context on user gesture
+    if (!audioUnlocked) {
+       if (!audioRef.current) {
+          audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+          audioRef.current.loop = true;
+       }
+       audioRef.current.play().then(() => {
+           audioRef.current?.pause();
+           audioRef.current!.currentTime = 0;
+           setAudioUnlocked(true);
+       }).catch(e => console.log("Audio unlock failed (Safari strict mode?):", e));
+    }
+
     setAlarmEnabled(true);
     setAlarmFired(false);
     setShowAlarmModal(false);
@@ -276,13 +333,31 @@ const RunningStatus = () => {
                 {alarmEnabled ? `Alert ${alarmMinutes}m before arrival` : "Get notified before the bus reaches your stop"}
               </p>
             </div>
-            {alarmEnabled && (
+              {alarmEnabled && (
               <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-lg font-bold">
                 ON
               </span>
             )}
           </button>
         </div>
+
+        {/* FIXED: Mobile Audio/Vibration Alarm (BUG 5) - Warning message */}
+        {alarmEnabled && !audioUnlocked && (
+          <div className="mb-4 bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-start gap-2 cursor-pointer hover:bg-amber-500/20" 
+            onClick={() => {
+              if (audioRef.current) {
+                audioRef.current.play().then(() => {
+                  audioRef.current?.pause();
+                  setAudioUnlocked(true);
+                }).catch(() => {});
+              }
+            }}>
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Audio alarm may be blocked. Tap here to ensure sound is enabled for the alarm.
+            </p>
+          </div>
+        )}
 
         {/* Alarm Modal */}
         {showAlarmModal && (
@@ -430,6 +505,32 @@ const RunningStatus = () => {
 
         </div>
       </AuthCard>
+
+      {/* Persistent Alarm Ringing Overlay */}
+      {isAlarmRinging && (
+        <div className="fixed inset-0 z-[100] bg-destructive/95 flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-background rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
+              <BellRing className="w-10 h-10 text-destructive" />
+            </div>
+            
+            <h2 className="text-3xl font-black text-foreground mb-2 tracking-tight">
+              Bus Arriving!
+            </h2>
+            <p className="text-muted-foreground text-lg mb-8">
+              Your bus is ~<span className="font-bold text-foreground">{selectedStopETA} min</span> away from <span className="font-bold text-foreground">{alarmStopName}</span>
+            </p>
+            
+            <button
+              onClick={stopAlarm}
+              className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground py-4 rounded-xl font-bold text-lg shadow-lg shadow-destructive/30 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-6 h-6" />
+              Stop Alarm
+            </button>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 };

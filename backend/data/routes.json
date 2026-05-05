@@ -257,8 +257,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 27,
         "arrivalTime": "07:45 AM"
@@ -267,8 +267,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -472,8 +472,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 20,
         "arrivalTime": "7:45 AM"
@@ -482,8 +482,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -741,8 +741,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 25,
         "arrivalTime": "1:45 PM"
@@ -751,8 +751,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -866,8 +866,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 9,
         "arrivalTime": "1:45 PM"
@@ -876,8 +876,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -1242,8 +1242,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 17,
         "arrivalTime": "7:35 AM"
@@ -1252,8 +1252,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -1502,8 +1502,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 24,
         "arrivalTime": "1:35 PM"
@@ -1512,8 +1512,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -1636,8 +1636,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 10,
         "arrivalTime": null
@@ -1646,8 +1646,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -1910,8 +1910,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 26,
         "arrivalTime": null
@@ -1920,8 +1920,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -2188,8 +2188,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 26,
         "arrivalTime": "1:40 PM"
@@ -2198,8 +2198,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -2349,7 +2349,7 @@
       {
         "name": "VANIVIHAR",
         "coordinates": {
-          "lat": 20.296173,
+          "lat": 20.2503973,
           "lng": 85.842683
         },
         "sequenceOrder": 13,
@@ -2457,8 +2457,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 25,
         "arrivalTime": "7:35 AM"
@@ -2467,8 +2467,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -2618,7 +2618,7 @@
       {
         "name": "VANIVIHAR",
         "coordinates": {
-          "lat": 20.296173,
+          "lat": 20.2503973,
           "lng": 85.842683
         },
         "sequenceOrder": 13,
@@ -2735,8 +2735,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 26,
         "arrivalTime": "1:45 PM"
@@ -2745,8 +2745,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -2986,8 +2986,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 23,
         "arrivalTime": null
@@ -2996,8 +2996,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "08:00 AM TO 1:00 PM",
@@ -3246,8 +3246,8 @@
       {
         "name": "ITER",
         "coordinates": {
-          "lat": 20.2496,
-          "lng": 85.7972
+          "lat": 20.25039,
+          "lng": 85.80004
         },
         "sequenceOrder": 24,
         "arrivalTime": "1:45 PM"
@@ -3256,8 +3256,8 @@
     "endPoint": {
       "name": "ITER",
       "coordinates": {
-        "lat": 20.2496,
-        "lng": 85.7972
+        "lat": 20.25039,
+        "lng": 85.80004
       }
     },
     "classTime": "02:00 PM TO 6:00 PM",
@@ -3274,5 +3274,94 @@
     ],
     "isActive": true,
     "remarks": "ARRIVAL AT ITER 01:45PM, DEPARTURE FROM ITER 06:15PM"
+  },
+  {
+    "busNumber": "CUTTACK-SPECIAL-1",
+    "busName": "CUTTACK - SPECIAL 1",
+    "routeName": "ITER to Cuttack Special Route",
+    "startPoint": {
+      "name": "ITER",
+      "coordinates": {
+        "lat": 20.2505,
+        "lng": 85.8012
+      }
+    },
+    "stoppages": [
+      {
+        "name": "ITER",
+        "coordinates": {
+          "lat": 20.2505,
+          "lng": 85.8012
+        },
+        "sequenceOrder": 0,
+        "arrivalTime": "08:00 AM"
+      },
+      {
+        "name": "PAHALA",
+        "coordinates": {
+          "lat": 20.3235,
+          "lng": 85.8770
+        },
+        "sequenceOrder": 1,
+        "arrivalTime": "08:30 AM"
+      },
+      {
+        "name": "NAKHARA",
+        "coordinates": {
+          "lat": 20.3540,
+          "lng": 85.8980
+        },
+        "sequenceOrder": 2,
+        "arrivalTime": "08:45 AM"
+      },
+      {
+        "name": "PRATAP NAGARI (DAKULEI PITHA)",
+        "coordinates": {
+          "lat": 20.4152,
+          "lng": 85.8915
+        },
+        "sequenceOrder": 3,
+        "arrivalTime": "09:00 AM"
+      },
+      {
+        "name": "LINK ROAD",
+        "coordinates": {
+          "lat": 20.4484,
+          "lng": 85.8784
+        },
+        "sequenceOrder": 4,
+        "arrivalTime": "09:15 AM"
+      },
+      {
+        "name": "BADAMBADI",
+        "coordinates": {
+          "lat": 20.4627,
+          "lng": 85.8739
+        },
+        "sequenceOrder": 5,
+        "arrivalTime": "09:30 AM"
+      },
+      {
+        "name": "ITER",
+        "coordinates": {
+          "lat": 20.2505,
+          "lng": 85.8012
+        },
+        "sequenceOrder": 6,
+        "arrivalTime": "10:30 AM"
+      }
+    ],
+    "endPoint": {
+      "name": "ITER",
+      "coordinates": {
+        "lat": 20.2505,
+        "lng": 85.8012
+      }
+    },
+    "classTime": "08:00 AM TO 1:00 PM",
+    "arrivalBus": "OD 02 BE 9999",
+    "drivers": [],
+    "isActive": true,
+    "remarks": "SPECIAL ROUTE"
   }
 ]

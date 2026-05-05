@@ -5,6 +5,10 @@ const { calculateStopWiseETA } = require("../utils/eta");
 const TIMEOUT = 10000;
 const PROXIMITY_RADIUS_M = 500; // meters for "bus near stop" alert
 
+// FIXED: Blocked Driver Socket Not Severed (BUG 2)
+const driverSocketMap = new Map(); // maps driver userId -> socketId
+const simulationStateStore = new Map(); // maps busId -> { driverId, routeId, currentStopIndex, isSimulating }
+
 // Haversine distance in meters
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -23,8 +27,13 @@ function socketHandler(io) {
     console.log(`[Socket] Connected: ${socket.id}`);
 
     // ── Student / generic join ──────────────────────────────────
-    socket.on("join-bus", ({ busId }) => {
+    socket.on("join-bus", ({ busId, driverId }) => {
       socket.join(busId);
+
+      // Track driver socket
+      if (driverId) {
+        driverSocketMap.set(driverId, socket.id);
+      }
 
       if (!busState[busId]) {
         busState[busId] = {
@@ -56,12 +65,26 @@ function socketHandler(io) {
     });
 
     // ── Driver location broadcast ──────────────────────────────
-    socket.on("driver-send-location", async ({ busId, lat, lng }) => {
+    socket.on("driver-send-location", async ({ busId, lat, lng, driverId }) => {
       // CRITICAL FIX: ensure driver socket is IN the room
       socket.join(busId);
 
+      if (driverId) {
+        driverSocketMap.set(driverId, socket.id);
+      }
+
       const route = ROUTES.find((r) => r.busNumber === busId);
       if (!route) return;
+
+      // FIXED: Duplicate Driver Broadcasting Lock (BUG 2)
+      if (busState[busId] && busState[busId].broadcaster && busState[busId].broadcaster !== socket.id) {
+        // Check if the current broadcaster is actually still connected
+        const currentBroadcaster = io.sockets.sockets.get(busState[busId].broadcaster);
+        if (currentBroadcaster) {
+            socket.emit("route-already-active", { message: "Another driver is already active on this route." });
+            return;
+        }
+      }
 
       const isNewSession =
         !busState[busId] || busState[busId].broadcaster !== socket.id;

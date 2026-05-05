@@ -6,7 +6,7 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');
 require('dotenv').config();
 
-const { getAllRoutes, getRouteByBus } = require('./controllers/routeController');
+// Route handlers have been moved
 const { initSocket } = require('./config/socket');
 const connectDB = require('./config/connectDB');
 
@@ -37,10 +37,13 @@ app.get('/', (req, res) => {
 });
 
 const userRouter = require('./routes/userRouter');
+const adminRouter = require('./routes/adminRoutes');
 app.use('/user', userRouter);
+app.use('/api/admin', adminRouter);
 
-app.get('/routes', getAllRoutes);
-app.get('/routes/:busId', getRouteByBus);
+const routeRouter = require('./routes/routeRoutes');
+app.use('/api/routes', routeRouter);
+app.use('/routes', routeRouter); // Keep legacy /routes for backward compatibility with frontend if needed
 
 // ====== SOCKET.IO INIT ======
 initSocket(server);
