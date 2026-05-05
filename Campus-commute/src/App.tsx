@@ -7,8 +7,23 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RouteProvider } from "@/contexts/RouteContext";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { setupFetchInterceptor } from "@/utils/api";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "PROVIDE_CLIENT_ID_IN_ENV";
+
+// FIXED: Global 401 Interceptor (BUG 1)
+const InterceptorSetup = () => {
+  const { logout } = useAuth();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setupFetchInterceptor(logout, toast);
+  }, [logout, toast]);
+
+  return null;
+};
 
 // Pages
 import Onboarding from "./pages/Onboarding";
@@ -75,6 +90,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
+          <InterceptorSetup />
           <RouteProvider>
             <TooltipProvider>
             <Toaster />

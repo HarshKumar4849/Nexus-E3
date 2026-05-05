@@ -65,6 +65,9 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
+const { getIO } = require("../config/socket");
+const { driverSocketMap } = require("./socketController");
+
 exports.blockUser = async (req, res) => {
     try {
         const { userId, block } = req.body;
@@ -76,6 +79,24 @@ exports.blockUser = async (req, res) => {
 
         const user = await User.findByIdAndUpdate(userId, { isBlocked: block }, { new: true }).select('-password');
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        // FIXED: Blocked Driver Socket Not Severed (BUG 2)
+        if (block && user.role === 'driver') {
+            const socketId = driverSocketMap.get(userId);
+            if (socketId) {
+                const io = getIO();
+                if (io) {
+                    io.to(socketId).emit("force-disconnect", { targetDriverId: userId });
+                    
+                    // Actually disconnect the socket server-side too
+                    const socketToDisconnect = io.sockets.sockets.get(socketId);
+                    if (socketToDisconnect) {
+                        socketToDisconnect.disconnect(true);
+                    }
+                }
+            }
+        }
+
         res.status(200).json({ success: true, user, message: `User ${block ? 'blocked' : 'unblocked'} successfully` });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server error" });

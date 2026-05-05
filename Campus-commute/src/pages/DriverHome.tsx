@@ -84,7 +84,7 @@ const DriverHome = () => {
       console.log("[Driver] Socket connected:", newSocket.id);
       // FIX #1: Join room on connect, before any location is sent
       if (user?.routeNo) {
-        newSocket.emit("join-bus", { busId: String(user.routeNo) });
+        newSocket.emit("join-bus", { busId: String(user.routeNo), driverId: user._id });
       }
       setSocketReady(true);
     });
@@ -121,6 +121,27 @@ const DriverHome = () => {
       setIsSimulating(false);
       newSocket.disconnect();
       navigate("/driver-dashboard");
+    });
+
+    // FIXED: Blocked Driver Socket Not Severed (BUG 2)
+    newSocket.on("force-disconnect", (data) => {
+      if (data.targetDriverId === user?._id) {
+        import("@/hooks/use-toast").then(({ toast }) => {
+          toast({
+            title: "Account Suspended",
+            description: "Your account has been suspended. Contact admin.",
+            variant: "destructive"
+          });
+        });
+        setLocationSharing(false);
+        setIsSimulating(false);
+        newSocket.disconnect();
+        
+        // Dispatch custom logout event if needed, or navigate directly to login since interceptor triggers on 401 anyway.
+        // To be safe, just clear storage/state by calling AuthContext logout if we had access here, 
+        // but we can just redirect and let the next API call fail or let the user re-login.
+        navigate("/login");
+      }
     });
 
     setSocket(newSocket);
@@ -182,7 +203,7 @@ const DriverHome = () => {
       pointIdx++;
 
       setCoords({ lat, lng });
-      socket.emit('driver-send-location', { busId: String(user.routeNo), lat, lng });
+      socket.emit('driver-send-location', { busId: String(user.routeNo), lat, lng, driverId: user?._id });
       setBroadcastCount(c => c + 1);
     }, 800); // 800ms per point = smooth realistic road movement
 
@@ -210,7 +231,8 @@ const DriverHome = () => {
           socket.emit("driver-send-location", {
             busId: String(user.routeNo),
             lat: newCoords.lat,
-            lng: newCoords.lng
+            lng: newCoords.lng,
+            driverId: user?._id
           });
           setBroadcastCount(c => c + 1);
         }

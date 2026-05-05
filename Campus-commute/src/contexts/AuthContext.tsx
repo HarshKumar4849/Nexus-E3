@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 export type UserRole = "student" | "driver" | "admin" | null;
 
 interface UserData {
+  _id?: string;
   email: string;
   fullName: string;
   role: UserRole;
@@ -91,6 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { user: serverUser } = await response.json();
       setIsAuthenticated(true);
       setUser({
+        _id: serverUser._id,
         email: serverUser.email,
         fullName: serverUser.fullname,
         role: serverUser.role || role,
@@ -120,6 +122,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { user: serverUser } = await response.json();
       setIsAuthenticated(true);
       setUser({
+        _id: serverUser._id,
         email: serverUser.email,
         fullName: serverUser.fullname,
         role: serverUser.role,
@@ -173,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { user: serverUser } = await res.json();
       setIsAuthenticated(true);
       setUser({
+        _id: serverUser._id,
         email: serverUser.email,
         fullName: serverUser.fullname,
         role: serverUser.role,
