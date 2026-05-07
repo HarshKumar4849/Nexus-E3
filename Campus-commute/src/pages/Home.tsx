@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Menu, Bell, MapPin, ChevronUp, ChevronDown, Bus, Clock, Navigation, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Menu, Bell, MapPin, ChevronUp, ChevronDown, Bus, Clock, Navigation, ChevronLeft, ChevronRight, Crosshair, WifiOff } from "lucide-react";
 import MobileLayout from "@/components/MobileLayout";
 import GradientButton from "@/components/GradientButton";
 import AppSidebar from "@/components/AppSidebar";
@@ -10,14 +10,21 @@ import { useRouteContext } from "@/contexts/RouteContext";
 
 const Home = () => {
   const { user } = useAuth();
-  const { routes, selectedRoute, setSelectedRoute, liveBusPosition } = useRouteContext();
+  const { routes, selectedRoute, setSelectedRoute, liveBusPosition, setLiveBusPosition, stopETAs, notifications, clearNotifications, socketConnected } = useRouteContext();
+  const mapRef = useRef<any>(null);
+  const [trackingBus, setTrackingBus] = useState(false);
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(true);
   
-  // Calculate dynamic ETA using first unvisited stop (placeholder 10m fallback)
-  const eta = 10; 
+  // Fix #5: Real ETA from backend stop-wise calculation
+  const eta = useMemo(() => {
+    if (stopETAs.length > 0) {
+      return stopETAs[0].minutes; // nearest stop ETA
+    }
+    return null; // no data yet
+  }, [stopETAs]); 
 
   if (!selectedRoute) {
     return (
@@ -162,8 +169,15 @@ const Home = () => {
           {/* Map Top-Gradient Shadow (ensures top bar icons are readable) */}
           <div className="absolute top-0 left-0 right-0 h-32 z-[1] pointer-events-none bg-gradient-to-b from-background/40 to-transparent"></div>
 
+          {/* FIXED: You are Offline Banner (BONUS 1) */}
+          {!socketConnected && (
+            <div className="absolute top-0 left-0 right-0 z-[1001] bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-center gap-2 text-sm font-semibold shadow-md animate-in slide-in-from-top">
+              <WifiOff className="w-4 h-4" /> Connection lost — trying to reconnect...
+            </div>
+          )}
+
           {/* Top Floating Control Bar */}
-          <div className="absolute top-0 left-0 right-0 z-10 px-6 pt-12 pb-4 pointer-events-none flex items-center justify-between">
+          <div className={`absolute left-0 right-0 z-10 px-6 pb-4 pointer-events-none flex items-center justify-between transition-all ${!socketConnected ? 'top-10 pt-4' : 'top-0 pt-12'}`}>
             <button 
               onClick={() => setSidebarOpen(true)}
               className="p-3 bg-background/80 backdrop-blur rounded-full shadow-sm pointer-events-auto hover:bg-background transition-colors"
@@ -181,17 +195,43 @@ const Home = () => {
               className="p-3 bg-background/80 backdrop-blur rounded-full shadow-sm relative pointer-events-auto hover:bg-background transition-colors"
             >
               <Bell className="w-5 h-5 text-foreground" />
-              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-destructive border-2 border-background rounded-full" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-background">
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
             </button>
           </div>
 
-          {/* ETA Pill constraint absolute tracking over map */}
-          {liveBusPosition && (
-            <div className="absolute top-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          {/* ETA Pill */}
+          {liveBusPosition && eta !== null && (
+            <div className="absolute top-40 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none">
               <div className="bg-primary/95 backdrop-blur text-primary-foreground px-5 py-2.5 rounded-full text-sm shadow-xl flex items-center gap-2 border border-primary-foreground/20">
                 <Clock className="w-4 h-4" />
                 <span className="font-medium whitespace-nowrap">Incoming in ~{eta} min</span>
               </div>
+            </div>
+          )}
+
+          {/* 📍 Track Bus Button — shown when live bus is active */}
+          {liveBusPosition && (
+            <div className="absolute bottom-48 right-4 z-[1001] md:bottom-8">
+              <button
+                onClick={() => {
+                  setTrackingBus(true);
+                  // Dispatch a custom event that RouteMap listens to for recentering
+                  window.dispatchEvent(new CustomEvent('recenter-on-bus', { detail: liveBusPosition }));
+                  setTimeout(() => setTrackingBus(false), 2000);
+                }}
+                className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl font-semibold text-sm transition-all ${
+                  trackingBus
+                    ? 'bg-emerald-500 text-white scale-95'
+                    : 'bg-background/95 backdrop-blur text-foreground border border-border hover:bg-primary hover:text-primary-foreground'
+                }`}
+              >
+                <Crosshair className="w-4 h-4" />
+                {trackingBus ? 'Tracking...' : '📍 Track Bus'}
+              </button>
             </div>
           )}
 
@@ -240,7 +280,7 @@ const Home = () => {
                       <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">ETA</p>
                       <p className="text-sm font-bold text-primary flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        {eta} min
+                        {eta !== null ? `${eta} min` : "—"}
                       </p>
                     </div>
                    </div>
@@ -277,7 +317,12 @@ const Home = () => {
         
         {/* Global Floating Handlers */}
         <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <NotificationSheet open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+        <NotificationSheet
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          notifications={notifications}
+          onClear={clearNotifications}
+        />
         
       </div>
     </MobileLayout>

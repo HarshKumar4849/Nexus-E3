@@ -16,10 +16,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 interface DeleteAccountModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
 }
 
-const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => {
+const DeleteAccountModal = ({ open, onOpenChange, onClose }: DeleteAccountModalProps) => {
+  const handleOpenChange = (isOpen: boolean) => {
+    if (onOpenChange) onOpenChange(isOpen);
+    if (!isOpen && onClose) onClose();
+  };
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const { toast } = useToast();
@@ -50,39 +55,30 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
     setIsDeleting(true);
 
     try {
-      const registeredAccounts = JSON.parse(
-        localStorage.getItem("campus-commute-accounts") || "[]"
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000"}/users/delete-account`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          // Send credentials to include cookies
+          credentials: "include",
+          body: JSON.stringify({ password }),
+        }
       );
 
-      // We explicitly search the local storage array instead of checking the user Context password natively. 
-      // This is because the 'completeSignup' function omits password injection into Context during fresh signups.
-      const targetAccount = registeredAccounts.find(
-        (acc: any) => acc.email === user?.email
-      );
+      const data = await response.json();
 
-      if (!targetAccount || targetAccount.password !== password) {
+      if (!response.ok) {
         toast({
           title: "Error",
-          description: "Password is incorrect.",
+          description: data.error || "Failed to delete account.",
           variant: "destructive",
         });
         setIsDeleting(false);
         return;
       }
-
-      // Remove account from registered accounts
-      const updatedAccounts = registeredAccounts.filter(
-        (acc: any) => acc.email !== user?.email
-      );
-      localStorage.setItem(
-        "campus-commute-accounts",
-        JSON.stringify(updatedAccounts)
-      );
-
-      // Clear current authenticating session markers
-      localStorage.removeItem("currentUser");
-      localStorage.removeItem("studentData");
-      localStorage.removeItem("driverData");
 
       // Logout and redirect
       logout();
@@ -104,14 +100,14 @@ const DeleteAccountModal = ({ open, onOpenChange }: DeleteAccountModalProps) => 
       });
     } finally {
       setIsDeleting(false);
-      onOpenChange(false);
+      handleOpenChange(false);
       setPassword("");
       setConfirmDelete(false);
     }
   };
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent className="max-w-sm">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-destructive">

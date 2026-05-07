@@ -1,16 +1,14 @@
 const { Server } = require("socket.io");
 const { socketHandler } = require("../controllers/socketController");
 
-function initSocket(server, allowedOrigins) {
-  const io = new Server(server, {
-    cors: {
-      origin: allowedOrigins || "*",
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
+let io;
+
+function initSocket(server) {
+  io = new Server(server, {
+    cors: { origin: "*" },
   });
 
   socketHandler(io);
 }
 
-module.exports = { initSocket };
+module.exports = { initSocket, getIO: () => io };

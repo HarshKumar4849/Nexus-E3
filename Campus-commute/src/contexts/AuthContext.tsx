@@ -1,10 +1,9 @@
-import { createContext, useContext, useState, ReactNode } from "react";
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export type UserRole = "student" | "driver" | "admin" | null;
 
 interface UserData {
+  _id?: string;
   email: string;
   fullName: string;
   role: UserRole;
@@ -12,6 +11,7 @@ interface UserData {
   routeNo?: string;
   timing?: string;
   selectedRoute?: number;
+  password?: string;
   phoneNumber?: string;
   branch?: string;
   course?: string;
@@ -29,12 +29,13 @@ interface AuthContextType {
   pendingRole: UserRole;
   pendingEmail: string;
   pendingUserData: Partial<UserData>;
-  login: (email: string, password: string, role: UserRole) => Promise<boolean>;
+  login: (email: string, password: string, role: UserRole) => Promise<{success: boolean, role?: UserRole}>;
+  googleLogin: (accessToken: string, role: UserRole) => Promise<{success: boolean, role?: UserRole}>;
   logout: () => void;
   setPendingRole: (role: UserRole) => void;
   setPendingEmail: (email: string) => void;
   setPendingUserData: (data: Partial<UserData>) => void;
-  completeSignup: (data: Partial<UserData>) => void;
+  completeSignup: (data: Partial<UserData>) => Promise<boolean>;
   updateUser: (data: Partial<UserData>) => void;
   setSelectedRoute: (route: number) => void;
 }
@@ -42,81 +43,159 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<UserData | null>(null);
-  const [pendingRole, setPendingRole] = useState<UserRole>(null);
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>({});
-
-  // ====== LOGIN — calls real backend API ======
-  const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
+  const [user, setUser] = useState<UserData | null>(() => {
     try {
-      const response = await fetch(`${BACKEND_URL}/user/login`, {
+      const stored = localStorage.getItem("campus-commute-session");
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!user);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem("campus-commute-session", JSON.stringify(user));
+      setIsAuthenticated(true);
+    } else {
+      localStorage.removeItem("campus-commute-session");
+      setIsAuthenticated(false);
+    }
+  }, [user]);
+  const [pendingRole, setPendingRole] = useState<UserRole>(() => {
+    try { return JSON.parse(localStorage.getItem("cc-pending-role") || "null"); } catch { return null; }
+  });
+  const [pendingEmail, setPendingEmail] = useState(() => {
+    return localStorage.getItem("cc-pending-email") || "";
+  });
+  const [pendingUserData, setPendingUserData] = useState<Partial<UserData>>(() => {
+    try { return JSON.parse(localStorage.getItem("cc-pending-data") || "{}"); } catch { return {}; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("cc-pending-role", JSON.stringify(pendingRole));
+    localStorage.setItem("cc-pending-email", pendingEmail);
+    localStorage.setItem("cc-pending-data", JSON.stringify(pendingUserData));
+  }, [pendingRole, pendingEmail, pendingUserData]);
+
+  const login = async (email: string, password: string, role: UserRole): Promise<{success: boolean, role?: UserRole}> => {
+    try {
+      const response = await fetch("http://localhost:8000/user/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // required for cross-origin cookie (Vercel + Render)
-        body: JSON.stringify({ email, password }),
+        credentials: "include",
+        body: JSON.stringify({ email, password })
       });
-
-      if (!response.ok) return false;
-
-      const data = await response.json();
-
+      if (!response.ok) {
+        if (response.status >= 500) throw new Error("Server error - please try again later.");
+        return { success: false };
+      }
+      
+      const { user: serverUser } = await response.json();
       setIsAuthenticated(true);
       setUser({
-        email: data.user.email,
-        fullName: data.user.fullname || data.user.fullName || "",
-        role: role, // role is determined by the login page selection on the frontend
-        selectedRoute: 1,
+        _id: serverUser._id,
+        email: serverUser.email,
+        fullName: serverUser.fullname,
+        role: serverUser.role || role,
+        routeNo: serverUser.routeNo,
+        selectedRoute: 1
       });
-
-      return true;
-    } catch (error) {
-      console.error("Login error:", error);
-      return false;
+      return { success: true, role: serverUser.role || role };
+    } catch (error: any) {
+      if (error.message.includes("Server error")) throw error;
+      throw new Error("Could not connect to the backend server.");
     }
   };
 
-  // ====== LOGOUT — calls real backend API ======
+  const googleLogin = async (accessToken: string, role: UserRole): Promise<{success: boolean, role?: UserRole}> => {
+    try {
+      const response = await fetch("http://localhost:8000/user/google-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ accessToken, role })
+      });
+      if (!response.ok) {
+        if (response.status >= 500) throw new Error("Server error - please try again later.");
+        return { success: false };
+      }
+      
+      const { user: serverUser } = await response.json();
+      setIsAuthenticated(true);
+      setUser({
+        _id: serverUser._id,
+        email: serverUser.email,
+        fullName: serverUser.fullname,
+        role: serverUser.role,
+        routeNo: serverUser.routeNo,
+        profileImage: serverUser.profileImage,
+        selectedRoute: 1
+      });
+      return { success: true, role: serverUser.role || role };
+    } catch (error: any) {
+      if (error.message.includes("Server error")) throw error;
+      throw new Error("Could not connect to the backend server.");
+    }
+  };
+
   const logout = async () => {
     try {
-      await fetch(`${BACKEND_URL}/user/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      // Always clear state regardless of API response
-      setIsAuthenticated(false);
-      setUser(null);
-      setPendingRole(null);
-      setPendingEmail("");
-      setPendingUserData({});
-    }
-  };
-
-  // ====== COMPLETE SIGNUP — called after registration API flow ======
-  const completeSignup = (data: Partial<UserData>) => {
-    setIsAuthenticated(true);
-    setUser({
-      email: data.email || pendingEmail,
-      fullName: data.fullName || pendingUserData.fullName || "",
-      role: data.role || pendingRole,
-      yearBatch: data.yearBatch || pendingUserData.yearBatch,
-      routeNo: data.routeNo || pendingUserData.routeNo,
-      timing: data.timing || pendingUserData.timing,
-      selectedRoute: data.selectedRoute || 1,
-      ...data,
-    });
+      await fetch("http://localhost:8000/user/logout", { method: "POST", credentials: "include" });
+    } catch {}
+    
+    // FIXED: Alarm Persist Fix on Logout (BONUS 3)
+    window.dispatchEvent(new Event("clear-alarm"));
+    
+    setIsAuthenticated(false);
+    setUser(null);
+    setPendingRole(null);
     setPendingEmail("");
     setPendingUserData({});
   };
 
-  // ====== UPDATE USER — local state update only ======
+  const completeSignup = async (data: Partial<UserData>): Promise<boolean> => {
+    try {
+      const payload = {
+         fullname: pendingUserData.fullName || pendingEmail.split('@')[0],
+         email: pendingEmail,
+         password: pendingUserData.password || "OAuthDefaultPassword!12",
+         role: pendingRole,
+         regdNo: pendingUserData.registrationNo,
+         routeNo: pendingUserData.routeNo,
+         timing: pendingUserData.timing,
+         phone: pendingUserData.phoneNumber
+      };
+
+      const res = await fetch("http://localhost:8000/user/register", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         credentials: "include",
+         body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error("Backend registration failed");
+
+      const { user: serverUser } = await res.json();
+      setIsAuthenticated(true);
+      setUser({
+        _id: serverUser._id,
+        email: serverUser.email,
+        fullName: serverUser.fullname,
+        role: serverUser.role,
+        routeNo: serverUser.routeNo,
+        selectedRoute: 1
+      });
+      setPendingEmail("");
+      setPendingUserData({});
+      return true;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
   const updateUser = (data: Partial<UserData>) => {
     if (user) {
-      setUser({ ...user, ...data });
+      const updated = { ...user, ...data };
+      setUser(updated);
     }
   };
 
@@ -135,6 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         pendingEmail,
         pendingUserData,
         login,
+        googleLogin,
         logout,
         setPendingRole,
         setPendingEmail,
